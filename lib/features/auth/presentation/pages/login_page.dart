@@ -1,0 +1,251 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../shared/presentation/widgets/app_button.dart';
+import '../../../../shared/presentation/widgets/app_text_field.dart';
+import '../providers/auth_provider.dart';
+
+class LoginPage extends ConsumerStatefulWidget {
+  /// Quando true, exibe "Adicionar conta" em vez de "Entrar".
+  final bool addMode;
+
+  const LoginPage({super.key, this.addMode = false});
+
+  @override
+  ConsumerState<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends ConsumerState<LoginPage> {
+  final _formKey     = GlobalKey<FormState>();
+  final _emailCtrl   = TextEditingController();
+  final _passwordCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _emailCtrl.dispose();
+    _passwordCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    await ref.read(authNotifierProvider.notifier).login(
+      _emailCtrl.text.trim(),
+      _passwordCtrl.text,
+    );
+
+    if (!mounted) return;
+
+    final state = ref.read(authNotifierProvider);
+    state.whenOrNull(
+      error: (e, _) => _showError(e.toString()),
+      data:  (_)    => context.go('/app'),
+    );
+  }
+
+  void _showError(String msg) {
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content:         Text(msg),
+          backgroundColor: AppColors.rose600,
+          behavior:        SnackBarBehavior.floating,
+          shape:           RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isLoading = ref.watch(authNotifierProvider).isLoading;
+    final isDark    = Theme.of(context).brightness == Brightness.dark;
+
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: Column(
+                children: [
+                  // ── Brand ─────────────────────────────────────────────
+                  _BrandHeader(),
+                  const SizedBox(height: 32),
+
+                  // ── Card ──────────────────────────────────────────────
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color:        isDark
+                          ? AppColors.slate800
+                          : Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border:       Border.all(
+                        color: isDark
+                            ? AppColors.slate700
+                            : AppColors.slate200,
+                      ),
+                      boxShadow: isDark
+                          ? null
+                          : [
+                              BoxShadow(
+                                color:      Colors.black.withOpacity(0.04),
+                                blurRadius: 8,
+                                offset:     const Offset(0, 2),
+                              ),
+                            ],
+                    ),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            widget.addMode ? 'Adicionar conta' : 'Entrar',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleLarge
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            widget.addMode
+                                ? 'Insira os dados da conta adicional.'
+                                : 'Bem-vindo de volta!',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(
+                                  color: isDark
+                                      ? AppColors.slate400
+                                      : AppColors.slate500,
+                                ),
+                          ),
+                          const SizedBox(height: 24),
+
+                          AppTextField(
+                            label:         'E-mail',
+                            hint:          'seu@email.com',
+                            controller:    _emailCtrl,
+                            keyboardType:  TextInputType.emailAddress,
+                            textInputAction: TextInputAction.next,
+                            validator: (v) {
+                              if (v == null || v.trim().isEmpty) {
+                                return 'E-mail é obrigatório.';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 16),
+
+                          AppTextField(
+                            label:           'Senha',
+                            hint:            '••••••',
+                            controller:      _passwordCtrl,
+                            obscureText:     true,
+                            textInputAction: TextInputAction.done,
+                            onEditingComplete: _submit,
+                            validator: (v) {
+                              if (v == null || v.length < 3) {
+                                return 'Mínimo 3 caracteres.';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 24),
+
+                          AppButton(
+                            label:     widget.addMode ? 'Adicionar conta' : 'Entrar',
+                            onPressed: _submit,
+                            isLoading: isLoading,
+                            width:     double.infinity,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // ── Link para cadastro ─────────────────────────────────
+                  if (!widget.addMode)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Não tem conta? ',
+                          style: TextStyle(
+                            color:    isDark
+                                ? AppColors.slate400
+                                : AppColors.slate500,
+                            fontSize: 13,
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => context.push('/register'),
+                          child: Text(
+                            'Criar conta',
+                            style: TextStyle(
+                              color:      isDark
+                                  ? Colors.white
+                                  : AppColors.slate900,
+                              fontSize:   13,
+                              fontWeight: FontWeight.w600,
+                              decoration: TextDecoration.underline,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BrandHeader extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Column(
+      children: [
+        Container(
+          width:  56,
+          height: 56,
+          decoration: BoxDecoration(
+            color:        isDark ? AppColors.slate800 : AppColors.slate900,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          alignment: Alignment.center,
+          child: const Text(
+            'BFC',
+            style: TextStyle(
+              color:      Colors.white,
+              fontWeight: FontWeight.w800,
+              fontSize:   18,
+              letterSpacing: 1,
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'BratnavaFC',
+          style: Theme.of(context)
+              .textTheme
+              .titleMedium
+              ?.copyWith(fontWeight: FontWeight.w700),
+        ),
+      ],
+    );
+  }
+}

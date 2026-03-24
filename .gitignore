@@ -1,0 +1,61 @@
+# ---------------------------
+# Flutter / Dart
+# ---------------------------
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub/
+build/
+
+# NÃO ignore pubspec.lock (IMPORTANTE para apps)
+# pubspec.lock
+
+# ---------------------------
+# Generated files
+# ---------------------------
+*.g.dart
+*.freezed.dart
+
+# ---------------------------
+# Android
+# ---------------------------
+android/.gradle/
+android/local.properties
+android/**/GeneratedPluginRegistrant.java
+
+# NÃO ignore gradlew (é necessário pro build)
+# android/gradlew
+# android/gradlew.bat
+
+# ---------------------------
+# iOS
+# ---------------------------
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/App.framework
+ios/Flutter/flutter_assets/
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+ios/Runner/GeneratedPluginRegistrant.*
+
+# ---------------------------
+# Env
+# ---------------------------
+.env
+.env.*
+
+# ---------------------------
+# IDE
+# ---------------------------
+.idea/
+.vscode/
+.vs/
+*.iml
+
+# ---------------------------
+# OS
+# ---------------------------
+.DS_Store
+Thumbs.db

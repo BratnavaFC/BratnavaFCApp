@@ -1,0 +1,550 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../auth/presentation/providers/account_store.dart';
+import '../../data/datasources/calendar_remote_datasource.dart';
+import '../../domain/entities/calendar_event.dart';
+import '../providers/calendar_provider.dart';
+import '../widgets/calendar_utils.dart';
+import '../widgets/category_manager_sheet.dart';
+import '../widgets/create_edit_event_sheet.dart';
+import '../widgets/day_events_sheet.dart';
+import '../widgets/day_view.dart';
+import '../widgets/event_detail_sheet.dart';
+import '../widgets/month_view.dart';
+import '../widgets/week_view.dart';
+
+enum _ViewMode { month, week, day }
+
+class CalendarPage extends ConsumerStatefulWidget {
+  const CalendarPage({super.key});
+
+  @override
+  ConsumerState<CalendarPage> createState() => _CalendarPageState();
+}
+
+class _CalendarPageState extends ConsumerState<CalendarPage> {
+  _ViewMode             _view   = _ViewMode.month;
+  DateTime              _cursor = DateTime.now();
+  List<CalendarEvent>   _events = [];
+  bool                  _loading = false;
+
+  CalendarRemoteDataSource get _ds => ref.read(calendarDsProvider);
+
+  String get _groupId =>
+      ref.read(accountStoreProvider).activeAccount?.activeGroupId ?? '';
+
+  bool get _isAdmin {
+    final acc = ref.read(accountStoreProvider).activeAccount;
+    if (acc == null) return false;
+    return acc.isAdmin || acc.groupAdminIds.contains(_groupId);
+  }
+
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _fetchEvents());
+  }
+
+  // ── Data ──────────────────────────────────────────────────────────────────
+
+  Future<void> _fetchEvents() async {
+    if (_groupId.isEmpty) return;
+    final range = _rangeForView();
+    setState(() => _loading = true);
+    try {
+      final evs = await _ds.fetchEvents(
+        _groupId, toDateStr(range.start), toDateStr(range.end));
+      if (mounted) setState(() { _events = evs; _loading = false; });
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  ({DateTime start, DateTime end}) _rangeForView() {
+    final y = _cursor.year;
+    final m = _cursor.month;
+
+    return switch (_view) {
+      _ViewMode.month => (
+          start: DateTime(y, m, 1),
+          end:   DateTime(y, m + 1, 0),
+        ),
+      _ViewMode.week => () {
+          final offset = _cursor.weekday - 1;
+          final mon    = _cursor.subtract(Duration(days: offset));
+          return (start: mon, end: mon.add(const Duration(days: 6)));
+        }(),
+      _ViewMode.day => (start: _cursor, end: _cursor),
+    };
+  }
+
+  // ── Navigation ────────────────────────────────────────────────────────────
+
+  void _prev() {
+    setState(() {
+      _cursor = switch (_view) {
+        _ViewMode.month => DateTime(_cursor.year, _cursor.month - 1),
+        _ViewMode.week  => _cursor.subtract(const Duration(days: 7)),
+        _ViewMode.day   => _cursor.subtract(const Duration(days: 1)),
+      };
+    });
+    _fetchEvents();
+  }
+
+  void _next() {
+    setState(() {
+      _cursor = switch (_view) {
+        _ViewMode.month => DateTime(_cursor.year, _cursor.month + 1),
+        _ViewMode.week  => _cursor.add(const Duration(days: 7)),
+        _ViewMode.day   => _cursor.add(const Duration(days: 1)),
+      };
+    });
+    _fetchEvents();
+  }
+
+  void _goToday() {
+    setState(() => _cursor = DateTime.now());
+    _fetchEvents();
+  }
+
+  void _setView(_ViewMode v) {
+    if (_view == v) return;
+    setState(() => _view = v);
+    _fetchEvents();
+  }
+
+  // ── Event actions ─────────────────────────────────────────────────────────
+
+  void _openEvent(BuildContext ctx, CalendarEvent ev) {
+    EventDetailSheet.show(
+      ctx,
+      ev:      ev,
+      isAdmin: _isAdmin,
+      onEdit:  () {
+        Navigator.pop(ctx);
+        _openCreateEdit(ctx, event: ev);
+      },
+      onDelete: () async {
+        Navigator.pop(ctx);
+        await _deleteEvent(ev);
+      },
+    );
+  }
+
+  void _openCreateEdit(BuildContext ctx, {CalendarEvent? event, String? date}) {
+    final cats = ref.read(calendarCategoriesProvider(_groupId)).valueOrNull ?? [];
+    CreateEditEventSheet.show(
+      ctx,
+      groupId:     _groupId,
+      datasource:  _ds,
+      categories:  cats,
+      event:       event,
+      initialDate: date,
+      onSaved:     _fetchEvents,
+    );
+  }
+
+  Future<void> _deleteEvent(CalendarEvent ev) async {
+    if (ev.id == null) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title:   const Text('Excluir evento'),
+        content: Text('Excluir "${ev.title}"?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Excluir', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await _ds.deleteEvent(_groupId, ev.id!);
+      _fetchEvents();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao excluir: $e')),
+        );
+      }
+    }
+  }
+
+  void _openDaySheet(BuildContext ctx, DateTime day, List<CalendarEvent> dayEvs) {
+    DayEventsSheet.show(
+      ctx,
+      day:       day,
+      events:    dayEvs,
+      isAdmin:   _isAdmin,
+      onEventTap: (ev) => _openEvent(ctx, ev),
+      onNewEvent: (date) => _openCreateEdit(ctx, date: date),
+    );
+  }
+
+  void _openCategories(BuildContext ctx) {
+    final cats = ref.read(calendarCategoriesProvider(_groupId)).valueOrNull ?? [];
+    CategoryManagerSheet.show(
+      ctx,
+      groupId:    _groupId,
+      datasource: _ds,
+      categories: cats,
+      onChanged:  () => ref.invalidate(calendarCategoriesProvider(_groupId)),
+    );
+  }
+
+  // ── Title helpers ─────────────────────────────────────────────────────────
+
+  String get _title {
+    return switch (_view) {
+      _ViewMode.month => _monthTitle(),
+      _ViewMode.week  => _weekTitle(),
+      _ViewMode.day   => _dayTitle(),
+    };
+  }
+
+  String _monthTitle() {
+    const months = ['janeiro','fevereiro','março','abril','maio','junho',
+        'julho','agosto','setembro','outubro','novembro','dezembro'];
+    return '${months[_cursor.month - 1]} ${_cursor.year}';
+  }
+
+  String _weekTitle() {
+    final offset = _cursor.weekday - 1;
+    final mon    = _cursor.subtract(Duration(days: offset));
+    final sun    = mon.add(const Duration(days: 6));
+    const months = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+    if (mon.month == sun.month) {
+      return '${mon.day}–${sun.day} ${months[mon.month - 1]} ${mon.year}';
+    }
+    return '${mon.day} ${months[mon.month - 1]} – ${sun.day} ${months[sun.month - 1]} ${sun.year}';
+  }
+
+  String _dayTitle() {
+    const weekdays = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
+    const months   = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+    return '${weekdays[_cursor.weekday - 1]}, ${_cursor.day} ${months[_cursor.month - 1]}';
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark  = Theme.of(context).brightness == Brightness.dark;
+
+    if (_groupId.isEmpty) {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.calendar_today_outlined, size: 44,
+                  color: isDark ? AppColors.slate700 : AppColors.slate200),
+              const SizedBox(height: 12),
+              Text('Selecione um grupo para ver o calendário.',
+                  style: TextStyle(color: isDark ? AppColors.slate500 : AppColors.slate400)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Scaffold(
+      body: Column(
+        children: [
+
+          // ── Header gradiente ─────────────────────────────────────────────
+          _CalendarHeader(
+            title:    _title,
+            loading:  _loading,
+            view:     _view,
+            isAdmin:  _isAdmin,
+            onPrev:   _prev,
+            onNext:   _next,
+            onToday:  _goToday,
+            onView:   _setView,
+            onNew:    () => _openCreateEdit(context),
+            onCategories: () => _openCategories(context),
+          ),
+
+          // ── Corpo do calendário ──────────────────────────────────────────
+          Expanded(
+            child: switch (_view) {
+              _ViewMode.month => MonthView(
+                  cursor: _cursor,
+                  events: _events,
+                  onDayTap: (day, dayEvs) => _openDaySheet(context, day, dayEvs),
+                ),
+              _ViewMode.week => WeekView(
+                  cursor:     _cursor,
+                  events:     _events,
+                  onEventTap: (ev) => _openEvent(context, ev),
+                ),
+              _ViewMode.day => DayView(
+                  cursor:     _cursor,
+                  events:     _events,
+                  isAdmin:    _isAdmin,
+                  onEventTap: (ev) => _openEvent(context, ev),
+                  onNewEvent: (date) => _openCreateEdit(context, date: date),
+                ),
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Header gradiente ──────────────────────────────────────────────────────────
+
+class _CalendarHeader extends StatelessWidget {
+  final String    title;
+  final bool      loading;
+  final _ViewMode view;
+  final bool      isAdmin;
+  final VoidCallback onPrev;
+  final VoidCallback onNext;
+  final VoidCallback onToday;
+  final void Function(_ViewMode) onView;
+  final VoidCallback onNew;
+  final VoidCallback onCategories;
+
+  const _CalendarHeader({
+    required this.title,
+    required this.loading,
+    required this.view,
+    required this.isAdmin,
+    required this.onPrev,
+    required this.onNext,
+    required this.onToday,
+    required this.onView,
+    required this.onNew,
+    required this.onCategories,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF0F172A), Color(0xFF1E293B), Color(0xFF0F172A)],
+          begin:  Alignment.topLeft,
+          end:    Alignment.bottomRight,
+        ),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Column(
+            children: [
+
+              // Row 1: ícone + título + ações admin
+              Row(
+                children: [
+                  Container(
+                    width: 40, height: 40,
+                    decoration: BoxDecoration(
+                      color:        Colors.white.withOpacity(.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border:       Border.all(color: Colors.white.withOpacity(.2)),
+                    ),
+                    child: const Icon(Icons.calendar_month_rounded,
+                        size: 20, color: Colors.white),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Calendário',
+                            style: TextStyle(
+                              color:      Colors.white,
+                              fontSize:   16,
+                              fontWeight: FontWeight.w900,
+                            )),
+                        loading
+                            ? Row(children: [
+                                const SizedBox(
+                                  width: 10, height: 10,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 1.5, color: Colors.white54,
+                                  ),
+                                ),
+                                const SizedBox(width: 5),
+                                Text('Carregando...',
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.white.withOpacity(.5))),
+                              ])
+                            : Text(
+                                title,
+                                style: TextStyle(
+                                  fontSize:  11,
+                                  color:     Colors.white.withOpacity(.5),
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                      ],
+                    ),
+                  ),
+                  if (isAdmin) ...[
+                    // Categorias
+                    _HdrBtn(
+                      icon: Icons.tune_rounded,
+                      onTap: onCategories,
+                      tooltip: 'Categorias',
+                    ),
+                    const SizedBox(width: 6),
+                    // Novo evento
+                    GestureDetector(
+                      onTap: onNew,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color:        Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Icon(Icons.add, size: 14, color: Color(0xFF0F172A)),
+                            SizedBox(width: 4),
+                            Text('Evento',
+                                style: TextStyle(
+                                  fontSize:   12,
+                                  fontWeight: FontWeight.w600,
+                                  color:      Color(0xFF0F172A),
+                                )),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+
+              const SizedBox(height: 12),
+
+              // Row 2: prev/next + hoje + view toggle
+              Row(
+                children: [
+                  // Prev
+                  _HdrBtn(icon: Icons.chevron_left_rounded, onTap: onPrev),
+                  const SizedBox(width: 6),
+                  // Next
+                  _HdrBtn(icon: Icons.chevron_right_rounded, onTap: onNext),
+                  const SizedBox(width: 6),
+                  // Hoje
+                  GestureDetector(
+                    onTap: onToday,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color:        Colors.white.withOpacity(.1),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white.withOpacity(.2)),
+                      ),
+                      child: Text('Hoje',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white.withOpacity(.9),
+                          )),
+                    ),
+                  ),
+                  const Spacer(),
+                  // View toggle
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.white.withOpacity(.2)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _ViewBtn(label: 'Mês',    mode: _ViewMode.month, current: view, onTap: onView),
+                        _ViewBtn(label: 'Semana', mode: _ViewMode.week,  current: view, onTap: onView),
+                        _ViewBtn(label: 'Dia',    mode: _ViewMode.day,   current: view, onTap: onView),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HdrBtn extends StatelessWidget {
+  final IconData     icon;
+  final VoidCallback onTap;
+  final String?      tooltip;
+  const _HdrBtn({required this.icon, required this.onTap, this.tooltip});
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip ?? '',
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 36, height: 36,
+          decoration: BoxDecoration(
+            color:        Colors.white.withOpacity(.1),
+            borderRadius: BorderRadius.circular(10),
+            border:       Border.all(color: Colors.white.withOpacity(.2)),
+          ),
+          child: Icon(icon, size: 18, color: Colors.white),
+        ),
+      ),
+    );
+  }
+}
+
+class _ViewBtn extends StatelessWidget {
+  final String                   label;
+  final _ViewMode                mode;
+  final _ViewMode                current;
+  final void Function(_ViewMode) onTap;
+
+  const _ViewBtn({
+    required this.label,
+    required this.mode,
+    required this.current,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = mode == current;
+    return GestureDetector(
+      onTap: () => onTap(mode),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color:        selected ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(9),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize:   11,
+            fontWeight: FontWeight.w600,
+            color:      selected
+                ? const Color(0xFF0F172A)
+                : Colors.white.withOpacity(.8),
+          ),
+        ),
+      ),
+    );
+  }
+}

@@ -1,0 +1,1722 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../domain/entities/match_details.dart';
+import '../providers/history_provider.dart';
+
+class MatchDetailsPage extends ConsumerStatefulWidget {
+  final String groupId;
+  final String matchId;
+
+  const MatchDetailsPage({
+    super.key,
+    required this.groupId,
+    required this.matchId,
+  });
+
+  @override
+  ConsumerState<MatchDetailsPage> createState() => _MatchDetailsPageState();
+}
+
+class _MatchDetailsPageState extends ConsumerState<MatchDetailsPage> {
+  // 0 = Todos, 1 = Time A, 2 = Time B
+  int _goalsTab = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark   = Theme.of(context).brightness == Brightness.dark;
+    final async    = ref.watch(matchDetailsProvider(
+      (groupId: widget.groupId, matchId: widget.matchId),
+    ));
+
+    return async.when(
+      loading: () => _LoadingSkeleton(isDark: isDark),
+      error: (e, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.error_outline,
+                  size: 40,
+                  color: isDark ? AppColors.slate500 : AppColors.slate400),
+              const SizedBox(height: 12),
+              Text(
+                'Erro ao carregar partida.\n$e',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: isDark ? AppColors.slate400 : AppColors.slate500,
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () => context.go('/app/history'),
+                child: const Text('Voltar'),
+              ),
+            ],
+          ),
+        ),
+      ),
+      data: (data) => _DetailsBody(
+        data:          data,
+        isDark:        isDark,
+        goalsTab:      _goalsTab,
+        onGoalsTab:    (t) => setState(() => _goalsTab = t),
+        onBack:        () => context.go('/app/history'),
+      ),
+    );
+  }
+}
+
+// ── Body ──────────────────────────────────────────────────────────────────────
+
+class _DetailsBody extends StatelessWidget {
+  final MatchDetails data;
+  final bool         isDark;
+  final int          goalsTab;
+  final void Function(int) onGoalsTab;
+  final VoidCallback onBack;
+
+  const _DetailsBody({
+    required this.data,
+    required this.isDark,
+    required this.goalsTab,
+    required this.onGoalsTab,
+    required this.onBack,
+  });
+
+  Color get aColor => _hexColor(data.teamAColor?.hexValue) ?? const Color(0xFF0f172a);
+  Color get bColor => _hexColor(data.teamBColor?.hexValue) ?? const Color(0xFF0f172a);
+  String get aName => data.teamAColor?.name ?? 'Time A';
+  String get bName => data.teamBColor?.name ?? 'Time B';
+
+  @override
+  Widget build(BuildContext context) {
+    // Build sorted goals with team info
+    final byMatchPlayerId = <String, String>{};
+    final byPlayerId      = <String, String>{};
+    for (final p in data.teamAPlayers) {
+      byMatchPlayerId[p.matchPlayerId] = 'A';
+      if (p.playerId != null) byPlayerId[p.playerId!] = 'A';
+    }
+    for (final p in data.teamBPlayers) {
+      byMatchPlayerId[p.matchPlayerId] = 'B';
+      if (p.playerId != null) byPlayerId[p.playerId!] = 'B';
+    }
+
+    final goals = data.goals.map((g) {
+      final scorerTeam =
+          (g.scorerMatchPlayerId != null ? byMatchPlayerId[g.scorerMatchPlayerId] : null) ??
+          (g.scorerPlayerId != null ? byPlayerId[g.scorerPlayerId] : null) ??
+          '?';
+      final team = g.isOwnGoal
+          ? (scorerTeam == 'A' ? 'B' : scorerTeam == 'B' ? 'A' : '?')
+          : scorerTeam;
+      return _GoalWithTeam(goal: g, team: team);
+    }).toList();
+
+    // Build goal events for simulation (enrich with tSec)
+    final goalEvents = _buildGoalEvents(goals);
+
+    // MVP
+    final mvpPlayer = [
+      ...data.teamAPlayers,
+      ...data.teamBPlayers,
+    ].where((p) => p.isMvp).firstOrNull;
+
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Back button
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+                child: TextButton.icon(
+                  onPressed: onBack,
+                  icon: const Icon(Icons.chevron_left_rounded, size: 18),
+                  label: const Text('Voltar ao histórico'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: isDark ? AppColors.slate400 : AppColors.slate500,
+                    alignment: Alignment.centerLeft,
+                  ),
+                ),
+              ),
+
+              // Hero score card
+              _HeroCard(
+                data:     data,
+                aColor:   aColor,
+                bColor:   bColor,
+                aName:    aName,
+                bName:    bName,
+                mvpPlayer: mvpPlayer,
+                isDark:   isDark,
+              ),
+
+              const SizedBox(height: 12),
+
+              // Simulação minuto a minuto
+              _SectionHeader(title: 'Simulação', isDark: isDark),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: _SimulationTimeline(
+                  goalEvents: goalEvents,
+                  aColor:     aColor,
+                  bColor:     bColor,
+                  aName:      aName,
+                  bName:      bName,
+                  isDark:     isDark,
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // Escalação (times)
+              _SectionHeader(title: 'Escalação', isDark: isDark),
+              _TeamCards(
+                teamAPlayers: data.teamAPlayers,
+                teamBPlayers: data.teamBPlayers,
+                aColor: aColor,
+                bColor: bColor,
+                aName:  aName,
+                bName:  bName,
+                isDark: isDark,
+              ),
+
+              const SizedBox(height: 12),
+
+              // Goals section
+              _SectionHeader(
+                title: 'Gols (${goals.length})',
+                isDark: isDark,
+              ),
+              _GoalsSection(
+                goals:     goals,
+                tab:       goalsTab,
+                onTab:     onGoalsTab,
+                aColor:    aColor,
+                bColor:    bColor,
+                aName:     aName,
+                bName:     bName,
+                isDark:    isDark,
+              ),
+
+              const SizedBox(height: 32),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Hero card ─────────────────────────────────────────────────────────────────
+
+class _HeroCard extends StatelessWidget {
+  final MatchDetails data;
+  final Color aColor, bColor;
+  final String aName, bName;
+  final MatchPlayer? mvpPlayer;
+  final bool isDark;
+
+  const _HeroCard({
+    required this.data,
+    required this.aColor,
+    required this.bColor,
+    required this.aName,
+    required this.bName,
+    required this.mvpPlayer,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final playedStr = data.playedAt != null
+        ? DateFormat("EEE, dd 'de' MMM 'de' yyyy • HH:mm", 'pt_BR')
+            .format(data.playedAt!)
+        : null;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Column(
+          children: [
+            // Top color strips
+            Row(children: [
+              Expanded(child: Container(height: 5, color: aColor)),
+              Expanded(child: Container(height: 5, color: bColor)),
+            ]),
+
+            // Dark background body
+            Container(
+              width: double.infinity,
+              color: const Color(0xFF0f172a),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              child: Column(
+                children: [
+                  // Team names row
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          children: [
+                            _ColorSwatch(color: aColor, size: 22),
+                            const SizedBox(height: 6),
+                            Text(
+                              aName.toUpperCase(),
+                              style: const TextStyle(
+                                fontSize:      11,
+                                fontWeight:    FontWeight.w700,
+                                letterSpacing: 1.2,
+                                color:         Color(0xFF94a3b8),
+                              ),
+                              textAlign:  TextAlign.center,
+                              maxLines:   1,
+                              overflow:   TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 8),
+                        child: Text(
+                          'vs',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color:    Color(0xFF475569),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Column(
+                          children: [
+                            _ColorSwatch(color: bColor, size: 22),
+                            const SizedBox(height: 6),
+                            Text(
+                              bName.toUpperCase(),
+                              style: const TextStyle(
+                                fontSize:      11,
+                                fontWeight:    FontWeight.w700,
+                                letterSpacing: 1.2,
+                                color:         Color(0xFF94a3b8),
+                              ),
+                              textAlign: TextAlign.center,
+                              maxLines:  1,
+                              overflow:  TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // Score
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        '${data.teamAGoals ?? '–'}',
+                        style: const TextStyle(
+                          fontSize:   64,
+                          fontWeight: FontWeight.w900,
+                          color:      Colors.white,
+                          height:     1,
+                        ),
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          '×',
+                          style: TextStyle(
+                            fontSize: 28,
+                            color:    Color(0xFF475569),
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '${data.teamBGoals ?? '–'}',
+                        style: const TextStyle(
+                          fontSize:   64,
+                          fontWeight: FontWeight.w900,
+                          color:      Colors.white,
+                          height:     1,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Match info
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      if (data.placeName != null)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.location_on_outlined,
+                                size: 12, color: Color(0xFF64748b)),
+                            const SizedBox(width: 4),
+                            Text(
+                              data.placeName!,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color:    Color(0xFF64748b),
+                              ),
+                            ),
+                          ],
+                        ),
+                      if (playedStr != null)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.calendar_today_outlined,
+                                size: 12, color: Color(0xFF64748b)),
+                            const SizedBox(width: 4),
+                            Text(
+                              playedStr,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color:    Color(0xFF64748b),
+                              ),
+                            ),
+                          ],
+                        ),
+                      if (data.statusName != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color:        Colors.white.withAlpha(15),
+                            borderRadius: BorderRadius.circular(99),
+                            border: Border.all(
+                                color: Colors.white.withAlpha(25)),
+                          ),
+                          child: Text(
+                            data.statusName!,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color:    Color(0xFFcbd5e1),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+
+                  // MVP
+                  if (mvpPlayer != null) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFfbbf24).withAlpha(25),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: const Color(0xFFfbbf24).withAlpha(50),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.emoji_events_rounded,
+                              size: 16, color: Color(0xFFfbbf24)),
+                          const SizedBox(width: 6),
+                          Text(
+                            'MVP: ${mvpPlayer!.playerName}',
+                            style: const TextStyle(
+                              fontSize:   13,
+                              fontWeight: FontWeight.w600,
+                              color:      Color(0xFFfde68a),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '(${mvpPlayer!.team == 1 ? data.teamAColor?.name ?? 'Time A' : data.teamBColor?.name ?? 'Time B'})',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color:    Color(0xFFfbbf24),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+            // Bottom color strips
+            Row(children: [
+              Expanded(child: Container(height: 5, color: aColor)),
+              Expanded(child: Container(height: 5, color: bColor)),
+            ]),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Team cards ────────────────────────────────────────────────────────────────
+
+class _TeamCards extends StatelessWidget {
+  final List<MatchPlayer> teamAPlayers;
+  final List<MatchPlayer> teamBPlayers;
+  final Color aColor, bColor;
+  final String aName, bName;
+  final bool isDark;
+
+  const _TeamCards({
+    required this.teamAPlayers,
+    required this.teamBPlayers,
+    required this.aColor,
+    required this.bColor,
+    required this.aName,
+    required this.bName,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: _TeamCard(
+              players: teamAPlayers,
+              color:   aColor,
+              name:    aName,
+              isDark:  isDark,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _TeamCard(
+              players: teamBPlayers,
+              color:   bColor,
+              name:    bName,
+              isDark:  isDark,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TeamCard extends StatelessWidget {
+  final List<MatchPlayer> players;
+  final Color  color;
+  final String name;
+  final bool   isDark;
+
+  const _TeamCard({
+    required this.players,
+    required this.color,
+    required this.name,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color:        isDark ? AppColors.slate900 : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? AppColors.slate700 : AppColors.slate200,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? AppColors.slate800.withAlpha(120)
+                  : AppColors.slate50,
+              borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(12)),
+              border: Border(
+                bottom: BorderSide(
+                  color: isDark ? AppColors.slate800 : AppColors.slate100,
+                ),
+              ),
+            ),
+            child: Row(
+              children: [
+                _ColorSwatch(color: color, size: 14),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    name,
+                    style: TextStyle(
+                      fontSize:   12,
+                      fontWeight: FontWeight.w700,
+                      color:      _teamTextColor(color, isDark),
+                    ),
+                    maxLines:  1,
+                    overflow:  TextOverflow.ellipsis,
+                  ),
+                ),
+                Text(
+                  '${players.length} jog.',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: isDark ? AppColors.slate500 : AppColors.slate400,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Players
+          if (players.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Text(
+                'Nenhum jogador.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark ? AppColors.slate500 : AppColors.slate400,
+                ),
+              ),
+            )
+          else
+            ...players.map((p) => Container(
+              decoration: BoxDecoration(
+                border: Border(
+                  left: BorderSide(color: color, width: 3),
+                  bottom: BorderSide(
+                    color: isDark ? AppColors.slate800 : AppColors.slate100,
+                  ),
+                ),
+              ),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 8, vertical: 7),
+              child: Row(
+                children: [
+                  if (p.isGoalkeeper) ...[
+                    Icon(
+                      Icons.sports_rounded,
+                      size:  14,
+                      color: isDark ? AppColors.slate400 : AppColors.slate500,
+                    ),
+                    const SizedBox(width: 4),
+                  ],
+                  Expanded(
+                    child: Text(
+                      p.playerName,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? AppColors.slate100 : AppColors.slate800,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (p.isMvp)
+                    const Icon(
+                      Icons.emoji_events_rounded,
+                      size:  13,
+                      color: Color(0xFFfbbf24),
+                    ),
+                ],
+              ),
+            )),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Goals section ─────────────────────────────────────────────────────────────
+
+class _GoalWithTeam {
+  final MatchGoal goal;
+  final String    team; // 'A' | 'B' | '?'
+  const _GoalWithTeam({required this.goal, required this.team});
+}
+
+class _GoalsSection extends StatelessWidget {
+  final List<_GoalWithTeam> goals;
+  final int    tab;
+  final void   Function(int) onTab;
+  final Color  aColor, bColor;
+  final String aName, bName;
+  final bool   isDark;
+
+  const _GoalsSection({
+    required this.goals,
+    required this.tab,
+    required this.onTab,
+    required this.aColor,
+    required this.bColor,
+    required this.aName,
+    required this.bName,
+    required this.isDark,
+  });
+
+  List<_GoalWithTeam> get _filtered {
+    if (tab == 1) return goals.where((g) => g.team == 'A').toList();
+    if (tab == 2) return goals.where((g) => g.team == 'B').toList();
+    return goals;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = _filtered;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Container(
+        decoration: BoxDecoration(
+          color:        isDark ? AppColors.slate900 : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isDark ? AppColors.slate700 : AppColors.slate200,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Tabs
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _TabBtn(
+                        label: 'Todos',
+                        active: tab == 0,
+                        isDark: isDark,
+                        onTap:  () => onTab(0)),
+                    const SizedBox(width: 6),
+                    _TabBtn(
+                        dotColor: aColor,
+                        label:    aName,
+                        active:   tab == 1,
+                        isDark:   isDark,
+                        onTap:    () => onTab(1)),
+                    const SizedBox(width: 6),
+                    _TabBtn(
+                        dotColor: bColor,
+                        label:    bName,
+                        active:   tab == 2,
+                        isDark:   isDark,
+                        onTap:    () => onTab(2)),
+                  ],
+                ),
+              ),
+            ),
+
+            const Divider(height: 1),
+
+            if (filtered.isEmpty)
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Center(
+                  child: Text(
+                    'Nenhum gol registrado.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isDark ? AppColors.slate500 : AppColors.slate400,
+                    ),
+                  ),
+                ),
+              )
+            else
+              ...filtered.map((g) => _GoalRow(
+                goalWithTeam: g,
+                aColor:  aColor,
+                bColor:  bColor,
+                isDark:  isDark,
+              )),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GoalRow extends StatelessWidget {
+  final _GoalWithTeam goalWithTeam;
+  final Color aColor, bColor;
+  final bool  isDark;
+
+  const _GoalRow({
+    required this.goalWithTeam,
+    required this.aColor,
+    required this.bColor,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final g     = goalWithTeam.goal;
+    final team  = goalWithTeam.team;
+    final color = team == 'A' ? aColor : team == 'B' ? bColor : AppColors.slate400;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: isDark ? AppColors.slate800 : AppColors.slate100,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          // Team dot
+          Container(
+            width:  8,
+            height: 8,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: color,
+            ),
+          ),
+          const SizedBox(width: 10),
+          // Scorer + assist
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Text('⚽ ', style: TextStyle(fontSize: 13)),
+                    Expanded(
+                      child: Text(
+                        g.scorerName ?? '—',
+                        style: TextStyle(
+                          fontSize:   13,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.white : AppColors.slate900,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (g.isOwnGoal)
+                      Container(
+                        margin: const EdgeInsets.only(left: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 5, vertical: 1),
+                        decoration: BoxDecoration(
+                          color:        const Color(0xFFfff7ed),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          'GC',
+                          style: TextStyle(
+                            fontSize:   9,
+                            fontWeight: FontWeight.w700,
+                            color:      Color(0xFFea580c),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                if (g.assistName != null && g.assistName!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      '🅰 ${g.assistName}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isDark ? AppColors.slate400 : AppColors.slate500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          // Time
+          if (g.time != null)
+            Text(
+              g.time!,
+              style: TextStyle(
+                fontSize:   11,
+                fontFamily: 'monospace',
+                color: isDark ? AppColors.slate500 : AppColors.slate400,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Tab button ────────────────────────────────────────────────────────────────
+
+class _TabBtn extends StatelessWidget {
+  final String   label;
+  final bool     active;
+  final bool     isDark;
+  final Color?   dotColor;
+  final VoidCallback onTap;
+
+  const _TabBtn({
+    required this.label,
+    required this.active,
+    required this.isDark,
+    this.dotColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: active
+              ? (isDark ? Colors.white : AppColors.slate900)
+              : (isDark ? AppColors.slate900 : Colors.white),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: active
+                ? (isDark ? Colors.white : AppColors.slate900)
+                : (isDark ? AppColors.slate700 : AppColors.slate200),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (dotColor != null) ...[
+              Container(
+                width:  8,
+                height: 8,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: dotColor,
+                ),
+              ),
+              const SizedBox(width: 5),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                fontSize:   12,
+                fontWeight: FontWeight.w500,
+                color: active
+                    ? (isDark ? AppColors.slate900 : Colors.white)
+                    : (isDark ? AppColors.slate300 : AppColors.slate700),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Section header ────────────────────────────────────────────────────────────
+
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  final bool   isDark;
+
+  const _SectionHeader({required this.title, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize:   15,
+          fontWeight: FontWeight.w700,
+          color: isDark ? Colors.white : AppColors.slate900,
+        ),
+      ),
+    );
+  }
+}
+
+// ── Color swatch ──────────────────────────────────────────────────────────────
+
+class _ColorSwatch extends StatelessWidget {
+  final Color color;
+  final double size;
+  const _ColorSwatch({required this.color, required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    final isWhite = color == const Color(0xFFFFFFFF);
+    return Container(
+      width:  size,
+      height: size,
+      decoration: BoxDecoration(
+        color:        color,
+        borderRadius: BorderRadius.circular(3),
+        border: Border.all(
+          color: isWhite
+              ? AppColors.slate300
+              : Colors.white.withAlpha(80),
+          width: 1,
+        ),
+      ),
+    );
+  }
+}
+
+// ── Loading skeleton ──────────────────────────────────────────────────────────
+
+class _LoadingSkeleton extends StatelessWidget {
+  final bool isDark;
+  const _LoadingSkeleton({required this.isDark});
+
+  Widget _box({double h = 20, double? w, double r = 8}) => Container(
+    height:  h,
+    width:   w,
+    margin:  const EdgeInsets.only(bottom: 8),
+    decoration: BoxDecoration(
+      color:        isDark ? AppColors.slate800 : AppColors.slate200,
+      borderRadius: BorderRadius.circular(r),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _box(h: 8, w: 120),
+          _box(h: 200, r: 16),
+          _box(h: 140, r: 12),
+          _box(h: 160, r: 12),
+          Row(
+            children: [
+              Expanded(child: _box(h: 160, r: 12)),
+              const SizedBox(width: 10),
+              Expanded(child: _box(h: 160, r: 12)),
+            ],
+          ),
+          _box(h: 140, r: 12),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+Color? _hexColor(String? hex) {
+  if (hex == null) return null;
+  try {
+    final h = hex.replaceAll('#', '').trim();
+    if (h.length == 3) {
+      final r = h[0] * 2; final g = h[1] * 2; final b = h[2] * 2;
+      return Color(int.parse('FF$r$g$b', radix: 16));
+    }
+    if (h.length == 6) return Color(int.parse('FF$h', radix: 16));
+  } catch (_) {}
+  return null;
+}
+
+bool _colorIsWhite(Color c) =>
+    (c.r * 255).round() > 240 &&
+    (c.g * 255).round() > 240 &&
+    (c.b * 255).round() > 240;
+
+Color _teamTextColor(Color bg, bool isDark) {
+  final isWhite = _colorIsWhite(bg);
+  if (isWhite) return isDark ? AppColors.slate900 : AppColors.slate700;
+  return bg;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SIMULATION TIMELINE
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Clock / math helpers ──────────────────────────────────────────────────────
+
+class _Clock {
+  final int h, m, s, minOfDay;
+  const _Clock({required this.h, required this.m, required this.s, required this.minOfDay});
+}
+
+_Clock? _parseClock(String? raw) {
+  if (raw == null || raw.isEmpty) return null;
+  final match = RegExp(r'(\d{1,2}):(\d{2})(?::(\d{2}))?').firstMatch(raw.trim());
+  if (match == null) return null;
+  final h  = int.parse(match.group(1)!);
+  final mm = int.parse(match.group(2)!);
+  final ss = match.group(3) != null ? int.parse(match.group(3)!) : 0;
+  if (h < 0 || h > 23 || mm < 0 || mm > 59 || ss < 0 || ss > 59) return null;
+  return _Clock(h: h, m: mm, s: ss, minOfDay: h * 60 + mm);
+}
+
+int _diffSecClock(_Clock goal, int startMinOfDay) {
+  int diffMin = goal.minOfDay - startMinOfDay;
+  if (diffMin < 0) diffMin += 1440;
+  return diffMin * 60 + goal.s;
+}
+
+int? _inferStart(List<String?> times) {
+  final clocks = times.map(_parseClock).whereType<_Clock>().toList();
+  if (clocks.isEmpty) return null;
+
+  final hourSet = clocks.map((c) => c.h).toSet();
+  final candidateHours = <int>{};
+  for (final h in hourSet) {
+    candidateHours.addAll([(h + 23) % 24, h, (h + 1) % 24]);
+  }
+
+  final candidates = <int>[];
+  for (final h in candidateHours) {
+    candidates.add(h * 60);
+    candidates.add(h * 60 + 30);
+  }
+  candidates.sort();
+
+  final first = (clocks.toList()..sort((a, b) => a.minOfDay.compareTo(b.minOfDay))).first;
+
+  int?   bestStart;
+  int    bestCount  = 0;
+  int    bestMax    = 9999999;
+  int    bestFirst  = 9999999;
+
+  for (final start in candidates) {
+    int count = 0, maxDiff = 0;
+    for (final c in clocks) {
+      final d = _diffSecClock(c, start);
+      if (d >= 0 && d <= 3600) {
+        count++;
+        if (d > maxDiff) maxDiff = d;
+      }
+    }
+    final firstDiff = _diffSecClock(first, start);
+    if (bestStart == null ||
+        count > bestCount ||
+        (count == bestCount && maxDiff < bestMax) ||
+        (count == bestCount && maxDiff == bestMax && firstDiff < bestFirst)) {
+      bestStart = start;
+      bestCount = count;
+      bestMax   = maxDiff;
+      bestFirst = firstDiff;
+    }
+  }
+
+  return (bestStart != null && bestCount > 0) ? bestStart : first.h * 60;
+}
+
+// ── GoalEvent ─────────────────────────────────────────────────────────────────
+
+class _GoalEvent {
+  final _GoalWithTeam goalWithTeam;
+  final int   tSec;   // seconds from game start, clamped 0..3600
+  final int   minute; // game minute
+
+  const _GoalEvent({required this.goalWithTeam, required this.tSec, required this.minute});
+}
+
+List<_GoalEvent> _buildGoalEvents(List<_GoalWithTeam> goals) {
+  if (goals.isEmpty) return [];
+
+  final times       = goals.map((g) => g.goal.time).toList();
+  final startMinOfDay = _inferStart(times);
+
+  return goals.map((g) {
+    final clock = _parseClock(g.goal.time);
+    int tSec = 3600; // default: end of game if no time
+    if (clock != null && startMinOfDay != null) {
+      tSec = _diffSecClock(clock, startMinOfDay).clamp(0, 3600);
+    }
+    final minute = (tSec / 60).floor().clamp(0, 60);
+    return _GoalEvent(goalWithTeam: g, tSec: tSec, minute: minute);
+  }).toList()
+    ..sort((a, b) => a.tSec.compareTo(b.tSec));
+}
+
+// ── _SimulationTimeline ────────────────────────────────────────────────────────
+
+class _SimulationTimeline extends StatefulWidget {
+  final List<_GoalEvent> goalEvents;
+  final Color  aColor, bColor;
+  final String aName,  bName;
+  final bool   isDark;
+
+  const _SimulationTimeline({
+    required this.goalEvents,
+    required this.aColor,
+    required this.bColor,
+    required this.aName,
+    required this.bName,
+    required this.isDark,
+  });
+
+  @override
+  State<_SimulationTimeline> createState() => _SimulationTimelineState();
+}
+
+class _SimulationTimelineState extends State<_SimulationTimeline>
+    with SingleTickerProviderStateMixin {
+  static const int _totalMinutes = 60;
+  static const int _durationMs   = 10000;
+
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync:    this,
+      duration: const Duration(milliseconds: _durationMs),
+    )..addListener(() => setState(() {}))
+     ..forward();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  double get _simSec    => (_ctrl.value * _totalMinutes * 60).clamp(0, _totalMinutes * 60.0);
+  int    get _simMinute => (_simSec / 60).floor().clamp(0, _totalMinutes);
+  double get _progress  => _ctrl.value.clamp(0.0, 1.0);
+  bool   get _running   => _ctrl.isAnimating;
+  bool   get _done      => _ctrl.value >= 1.0;
+
+  void _play()    { if (_done) { _ctrl.reset(); } _ctrl.forward(); }
+  void _pause()   { _ctrl.stop(); }
+  void _restart() { _ctrl.reset(); _ctrl.forward(); }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = widget.isDark;
+
+    final goalsA = widget.goalEvents.where((g) => g.goalWithTeam.team == 'A').toList();
+    final goalsB = widget.goalEvents.where((g) => g.goalWithTeam.team == 'B').toList();
+
+    final scoreA = goalsA.where((g) => g.tSec <= _simSec).length;
+    final scoreB = goalsB.where((g) => g.tSec <= _simSec).length;
+
+    return Container(
+      decoration: BoxDecoration(
+        color:        isDark ? AppColors.slate900 : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? AppColors.slate700 : AppColors.slate200,
+        ),
+      ),
+      child: Column(
+        children: [
+          // Controls bar
+          _buildControlsBar(isDark),
+
+          // Score display
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _ScoreChip(
+                  color: widget.aColor,
+                  name:  widget.aName,
+                  score: scoreA,
+                  isDark: isDark,
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(
+                    '×',
+                    style: TextStyle(
+                      fontSize:   18,
+                      color: isDark ? AppColors.slate600 : AppColors.slate300,
+                    ),
+                  ),
+                ),
+                _ScoreChip(
+                  color: widget.bColor,
+                  name:  widget.bName,
+                  score: scoreB,
+                  isDark: isDark,
+                ),
+              ],
+            ),
+          ),
+
+          // Timeline bars
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+            child: Column(
+              children: [
+                _TimelineBar(
+                  teamName:     widget.aName,
+                  teamColor:    widget.aColor,
+                  goals:        goalsA,
+                  progress:     _progress,
+                  simSec:       _simSec,
+                  totalMinutes: _totalMinutes,
+                  isDark:       isDark,
+                ),
+                const SizedBox(height: 20),
+                _TimelineBar(
+                  teamName:     widget.bName,
+                  teamColor:    widget.bColor,
+                  goals:        goalsB,
+                  progress:     _progress,
+                  simSec:       _simSec,
+                  totalMinutes: _totalMinutes,
+                  isDark:       isDark,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildControlsBar(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: isDark
+            ? AppColors.slate800.withAlpha(120)
+            : AppColors.slate50,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+        border: Border(
+          bottom: BorderSide(
+            color: isDark ? AppColors.slate800 : AppColors.slate100,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          // Minute counter
+          SizedBox(
+            width: 52,
+            child: RichText(
+              text: TextSpan(
+                children: [
+                  TextSpan(
+                    text: "$_simMinute'",
+                    style: TextStyle(
+                      fontFamily:  'monospace',
+                      fontSize:    13,
+                      fontWeight:  FontWeight.w600,
+                      color: isDark ? AppColors.slate300 : AppColors.slate700,
+                    ),
+                  ),
+                  TextSpan(
+                    text: '/$_totalMinutes',
+                    style: TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize:   11,
+                      color: isDark ? AppColors.slate600 : AppColors.slate400,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Overall progress bar
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(3),
+              child: Container(
+                height: 6,
+                color:  isDark ? AppColors.slate700 : AppColors.slate200,
+                child: FractionallySizedBox(
+                  widthFactor: _progress,
+                  alignment:   Alignment.centerLeft,
+                  child: Container(
+                    color: isDark ? AppColors.slate400 : AppColors.slate500,
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 10),
+
+          // Restart
+          _CtrlBtn(
+            icon:   Icons.replay_rounded,
+            onTap:  _restart,
+            isDark: isDark,
+          ),
+          const SizedBox(width: 4),
+          // Play
+          _CtrlBtn(
+            icon:    Icons.play_arrow_rounded,
+            onTap:   _running ? null : _play,
+            isDark:  isDark,
+          ),
+          const SizedBox(width: 4),
+          // Pause
+          _CtrlBtn(
+            icon:   Icons.pause_rounded,
+            onTap:  _running ? _pause : null,
+            isDark: isDark,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Score chip ────────────────────────────────────────────────────────────────
+
+class _ScoreChip extends StatelessWidget {
+  final Color  color;
+  final String name;
+  final int    score;
+  final bool   isDark;
+
+  const _ScoreChip({
+    required this.color,
+    required this.name,
+    required this.score,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isWhite = _colorIsWhite(color);
+    final labelColor = isWhite
+        ? (isDark ? AppColors.slate300 : AppColors.slate600)
+        : color;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 10, height: 10,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: color,
+            border: Border.all(
+              color: isWhite ? AppColors.slate300 : Colors.white.withAlpha(60),
+              width: 1,
+            ),
+          ),
+        ),
+        const SizedBox(width: 5),
+        Text(
+          name,
+          style: TextStyle(
+            fontSize:   11,
+            fontWeight: FontWeight.w600,
+            color:      labelColor,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(width: 6),
+        AnimatedSwitcher(
+          duration:       const Duration(milliseconds: 250),
+          transitionBuilder: (child, anim) => ScaleTransition(
+            scale: anim,
+            child: FadeTransition(opacity: anim, child: child),
+          ),
+          child: Text(
+            '$score',
+            key: ValueKey(score),
+            style: TextStyle(
+              fontSize:   18,
+              fontWeight: FontWeight.w900,
+              color: isDark ? Colors.white : AppColors.slate900,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Timeline bar ──────────────────────────────────────────────────────────────
+
+class _TimelineBar extends StatelessWidget {
+  final String         teamName;
+  final Color          teamColor;
+  final List<_GoalEvent> goals;      // this team's goals only
+  final double         progress;    // 0..1
+  final double         simSec;      // current sim seconds
+  final int            totalMinutes;
+  final bool           isDark;
+
+  const _TimelineBar({
+    required this.teamName,
+    required this.teamColor,
+    required this.goals,
+    required this.progress,
+    required this.simSec,
+    required this.totalMinutes,
+    required this.isDark,
+  });
+
+  bool get _isWhite => _colorIsWhite(teamColor);
+
+  Color get _safeBorder => _isWhite ? AppColors.slate400 : teamColor;
+  Color get _safeLabel  => _isWhite
+      ? (isDark ? AppColors.slate300 : AppColors.slate600)
+      : teamColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final totalGoals   = goals.length;
+    final currentGoals = goals.where((g) => g.tSec <= simSec).length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Label row
+        Row(
+          children: [
+            // Colored dot
+            Container(
+              width: 11, height: 11,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: teamColor,
+                border: Border.all(color: _safeBorder, width: 1.5),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                teamName,
+                style: TextStyle(
+                  fontSize:   12,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? AppColors.slate400 : AppColors.slate600,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            RichText(
+              text: TextSpan(
+                children: [
+                  TextSpan(
+                    text: '$currentGoals',
+                    style: TextStyle(
+                      fontSize:   11,
+                      fontWeight: FontWeight.w700,
+                      color:      _safeLabel,
+                    ),
+                  ),
+                  TextSpan(
+                    text: '/$totalGoals',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark ? AppColors.slate600 : AppColors.slate300,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+
+        // Timeline track with LayoutBuilder to get actual pixel width
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final trackW     = constraints.maxWidth;
+            final progressPx = (progress * trackW).clamp(0.0, trackW);
+
+            return SizedBox(
+              height: 52,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  // ── Background rail ─────────────────────────────
+                  Positioned(
+                    left: 0, right: 0, top: 22, height: 8,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color:        isDark ? AppColors.slate800 : AppColors.slate100,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(
+                          color: isDark ? AppColors.slate700 : AppColors.slate200,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // ── Progress fill (team color, ~55% opacity) ────
+                  Positioned(
+                    left: 0, top: 22, width: progressPx, height: 8,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: (_isWhite ? AppColors.slate400 : teamColor)
+                            .withAlpha(140),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ),
+
+                  // ── Current-time cursor ──────────────────────────
+                  if (progressPx > 0 && progressPx < trackW)
+                    Positioned(
+                      left:   progressPx - 0.5,
+                      top:    18,
+                      height: 16,
+                      child: Container(
+                        width: 1,
+                        color: AppColors.slate400.withAlpha(160),
+                      ),
+                    ),
+
+                  // ── Tick marks (every 10 min = 7 ticks: 0,10,20,30,40,50,60)
+                  ...List.generate(7, (i) {
+                    final x = (i / 6.0) * trackW - 0.5;
+                    return Positioned(
+                      left:   x,
+                      top:    18,
+                      height: 16,
+                      child: Container(
+                        width: 1,
+                        color: (isDark ? AppColors.slate700 : AppColors.slate200)
+                            .withAlpha(200),
+                      ),
+                    );
+                  }),
+
+                  // ── Goal markers (evenly distributed, appear in chronological order)
+                  ...goals.asMap().entries.map((entry) {
+                    const ballSize  = 28.0;
+                    // Rail: top=22, height=8 → centre at y=26.
+                    // Ball top so its centre aligns with rail centre: 26 - 14 = 12.
+                    const ballTop   = 12.0;
+                    final idx       = entry.key;
+                    final g         = entry.value;
+                    final n         = goals.length;
+                    // Divide the track into n equal slots; center the ball in its slot.
+                    final slotW     = trackW / n;
+                    final left      = slotW * idx + (slotW - ballSize) / 2;
+                    final isVisible = g.tSec <= simSec;
+
+                    return Positioned(
+                      left: left.clamp(0.0, trackW - ballSize),
+                      top:  ballTop,
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 300),
+                        opacity:  isVisible ? 1.0 : 0.0,
+                        child: AnimatedScale(
+                          duration: const Duration(milliseconds: 300),
+                          scale:    isVisible ? 1.0 : 0.3,
+                          child: Tooltip(
+                            message: '${g.minute}\' • ${g.goalWithTeam.goal.scorerName ?? ""}',
+                            child: _GoalBall(
+                              teamColor:   teamColor,
+                              borderColor: _safeBorder,
+                              isWhite:     _isWhite,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+// ── Goal ball ─────────────────────────────────────────────────────────────────
+
+class _GoalBall extends StatelessWidget {
+  final Color teamColor;
+  final Color borderColor;
+  final bool  isWhite;
+
+  const _GoalBall({
+    required this.teamColor,
+    required this.borderColor,
+    required this.isWhite,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width:  28,
+      height: 28,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.white,
+        border: Border.all(color: borderColor, width: 2),
+        boxShadow: [
+          BoxShadow(
+            color:      teamColor.withAlpha(isWhite ? 40 : 80),
+            blurRadius: 6,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      child: const Center(
+        child: Text('⚽', style: TextStyle(fontSize: 14, height: 1)),
+      ),
+    );
+  }
+}
+
+// ── Control button ────────────────────────────────────────────────────────────
+
+class _CtrlBtn extends StatelessWidget {
+  final IconData       icon;
+  final VoidCallback?  onTap;
+  final bool           isDark;
+
+  const _CtrlBtn({required this.icon, this.onTap, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Opacity(
+        opacity: onTap == null ? 0.35 : 1.0,
+        child: Container(
+          width:  32,
+          height: 32,
+          decoration: BoxDecoration(
+            color:        isDark ? AppColors.slate900 : Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isDark ? AppColors.slate700 : AppColors.slate200,
+            ),
+          ),
+          child: Icon(
+            icon,
+            size:  16,
+            color: isDark ? AppColors.slate300 : AppColors.slate600,
+          ),
+        ),
+      ),
+    );
+  }
+}

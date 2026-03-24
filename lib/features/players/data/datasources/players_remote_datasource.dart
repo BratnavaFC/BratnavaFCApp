@@ -9,12 +9,72 @@ class PlayersRemoteDataSource {
 
   // ── Users ────────────────────────────────────────────────────────────────────
 
+  Future<AppUser> fetchUserById(String id) async {
+    final res = await _dio.get(ApiConstants.userById(id));
+    final raw = _unwrapMap(res.data);
+    return AppUser.fromJson(raw);
+  }
+
   Future<List<AppUser>> fetchUsers() async {
-    final res = await _dio.get(ApiConstants.users);
-    final raw = _unwrapList(res.data);
+    final res = await _dio.get(
+      ApiConstants.users,
+      queryParameters: {'pageSize': 200},
+    );
+    // Response shape: { success, data: { page, pageSize, total, items: [...] } }
+    // Fall back to flat list if the API changes shape in the future.
+    final raw = _unwrapPagedList(res.data);
     return raw
         .map((e) => AppUser.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  Future<AppUser> updateUser(
+    String id, {
+    required String firstName,
+    required String lastName,
+    required String userName,
+    required String email,
+    String? phone,
+    String? birthDate,   // ISO-8601, e.g. "1990-05-20"
+    bool?   isActive,
+  }) async {
+    final body = <String, dynamic>{
+      'firstName': firstName,
+      'lastName':  lastName,
+      'userName':  userName,
+      'email':     email,
+      if (phone     != null) 'phone':     phone,
+      if (birthDate != null) 'birthDate': birthDate,
+      if (isActive  != null) 'isActive':  isActive,
+    };
+    final res = await _dio.put(ApiConstants.userById(id), data: body);
+    return AppUser.fromJson(_unwrapMap(res.data));
+  }
+
+  Future<void> changePassword(
+    String id, {
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    await _dio.post(
+      ApiConstants.changePassword(id),
+      data: {
+        'currentPassword': currentPassword,
+        'newPassword':     newPassword,
+      },
+    );
+  }
+
+  Future<AppUser> toggleUserActive(String id, {required bool activate}) async {
+    final url = activate
+        ? ApiConstants.activateUser(id)
+        : ApiConstants.deactivateUser(id);
+    final res = await _dio.post(url);
+    // Some APIs return the updated user; some return 204. Handle both.
+    if (res.data == null || res.statusCode == 204) {
+      return fetchUserById(id);
+    }
+    return AppUser.fromJson(_unwrapMap(res.data));
   }
 
   // ── Players (group) ───────────────────────────────────────────────────────────
@@ -81,6 +141,21 @@ class PlayersRemoteDataSource {
     if (data is Map) {
       final d = data['data'];
       if (d is List) return d;
+    }
+    return [];
+  }
+
+  /// Handles paginated envelope: { success, data: { items: [...], ... } }
+  /// Falls back to _unwrapList for flat responses.
+  List<dynamic> _unwrapPagedList(dynamic data) {
+    if (data is List) return data;
+    if (data is Map) {
+      final d = data['data'];
+      if (d is List) return d;
+      if (d is Map) {
+        final items = d['items'];
+        if (items is List) return items;
+      }
     }
     return [];
   }

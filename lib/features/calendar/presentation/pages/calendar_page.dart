@@ -350,9 +350,9 @@ class _CalendarHeader extends StatelessWidget {
                   Container(
                     width: 40, height: 40,
                     decoration: BoxDecoration(
-                      color:        Colors.white.withOpacity(.1),
+                      color:        Colors.white.withValues(alpha: .1),
                       borderRadius: BorderRadius.circular(12),
-                      border:       Border.all(color: Colors.white.withOpacity(.2)),
+                      border:       Border.all(color: Colors.white.withValues(alpha: .2)),
                     ),
                     child: const Icon(Icons.calendar_month_rounded,
                         size: 20, color: Colors.white),
@@ -380,13 +380,13 @@ class _CalendarHeader extends StatelessWidget {
                                 Text('Carregando...',
                                     style: TextStyle(
                                         fontSize: 11,
-                                        color: Colors.white.withOpacity(.5))),
+                                        color: Colors.white.withValues(alpha: .5))),
                               ])
                             : Text(
                                 title,
                                 style: TextStyle(
                                   fontSize:  11,
-                                  color:     Colors.white.withOpacity(.5),
+                                  color:     Colors.white.withValues(alpha: .5),
                                 ),
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -410,9 +410,9 @@ class _CalendarHeader extends StatelessWidget {
                           color:        Colors.white,
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Row(
+                        child: const Row(
                           mainAxisSize: MainAxisSize.min,
-                          children: const [
+                          children: [
                             Icon(Icons.add, size: 14, color: Color(0xFF0F172A)),
                             SizedBox(width: 4),
                             Text('Evento',
@@ -446,15 +446,15 @@ class _CalendarHeader extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
-                        color:        Colors.white.withOpacity(.1),
+                        color:        Colors.white.withValues(alpha: .1),
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.white.withOpacity(.2)),
+                        border: Border.all(color: Colors.white.withValues(alpha: .2)),
                       ),
                       child: Text('Hoje',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: Colors.white.withOpacity(.9),
+                            color: Colors.white.withValues(alpha: .9),
                           )),
                     ),
                   ),
@@ -463,7 +463,7 @@ class _CalendarHeader extends StatelessWidget {
                   Container(
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.white.withOpacity(.2)),
+                      border: Border.all(color: Colors.white.withValues(alpha: .2)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -499,9 +499,9 @@ class _HdrBtn extends StatelessWidget {
         child: Container(
           width: 36, height: 36,
           decoration: BoxDecoration(
-            color:        Colors.white.withOpacity(.1),
+            color:        Colors.white.withValues(alpha: .1),
             borderRadius: BorderRadius.circular(10),
-            border:       Border.all(color: Colors.white.withOpacity(.2)),
+            border:       Border.all(color: Colors.white.withValues(alpha: .2)),
           ),
           child: Icon(icon, size: 18, color: Colors.white),
         ),
@@ -541,7 +541,7 @@ class _ViewBtn extends StatelessWidget {
             fontWeight: FontWeight.w600,
             color:      selected
                 ? const Color(0xFF0F172A)
-                : Colors.white.withOpacity(.8),
+                : Colors.white.withValues(alpha: .8),
           ),
         ),
       ),

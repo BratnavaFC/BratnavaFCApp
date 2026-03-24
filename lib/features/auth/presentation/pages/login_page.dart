@@ -17,9 +17,10 @@ class LoginPage extends ConsumerStatefulWidget {
 }
 
 class _LoginPageState extends ConsumerState<LoginPage> {
-  final _formKey     = GlobalKey<FormState>();
-  final _emailCtrl   = TextEditingController();
+  final _formKey      = GlobalKey<FormState>();
+  final _emailCtrl    = TextEditingController();
   final _passwordCtrl = TextEditingController();
+  bool  _keepLoggedIn = true;
 
   @override
   void dispose() {
@@ -34,6 +35,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     await ref.read(authNotifierProvider.notifier).login(
       _emailCtrl.text.trim(),
       _passwordCtrl.text,
+      keepLoggedIn: _keepLoggedIn,
     );
 
     if (!mounted) return;
@@ -94,7 +96,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           ? null
                           : [
                               BoxShadow(
-                                color:      Colors.black.withOpacity(0.04),
+                                color:      Colors.black.withValues(alpha: 0.04),
                                 blurRadius: 8,
                                 offset:     const Offset(0, 2),
                               ),
@@ -157,7 +159,44 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                               return null;
                             },
                           ),
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 12),
+
+                          // ── Manter logado ─────────────────────────────
+                          if (!widget.addMode)
+                            GestureDetector(
+                              onTap: () => setState(
+                                  () => _keepLoggedIn = !_keepLoggedIn),
+                              child: Row(
+                                children: [
+                                  SizedBox(
+                                    width:  20,
+                                    height: 20,
+                                    child: Checkbox(
+                                      value:    _keepLoggedIn,
+                                      onChanged: (v) => setState(
+                                          () => _keepLoggedIn = v ?? true),
+                                      materialTapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    'Manter logado',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: isDark
+                                          ? AppColors.slate300
+                                          : AppColors.slate600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                          const SizedBox(height: 20),
 
                           AppButton(
                             label:     widget.addMode ? 'Adicionar conta' : 'Entrar',

@@ -79,11 +79,11 @@ class RecentMatch extends Equatable {
   List<Object?> get props => [matchId, playedAt, outcome];
 }
 
-/// .NET retorna UTC sem sufixo 'Z' — forçamos UTC antes de converter para local.
+/// Strips timezone suffix, parses as wall-clock time, then subtracts 3 hours
+/// to compensate for the backend always returning times 3 hours ahead (UTC vs UTC-3).
 DateTime _parseDate(String? s) {
   if (s == null || s.isEmpty) return DateTime.now();
-  final hasTimezone = s.contains('Z') || s.contains('+') ||
-      RegExp(r'-\d{2}:\d{2}$').hasMatch(s);
-  final normalized  = hasTimezone ? s : '${s}Z';
-  return DateTime.tryParse(normalized)?.toLocal() ?? DateTime.now();
+  final bare = s.replaceFirst(RegExp(r'Z$|[+-]\d{2}:\d{2}$'), '');
+  final dt = DateTime.tryParse(bare) ?? DateTime.now();
+  return dt.subtract(const Duration(hours: 3));
 }

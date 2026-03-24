@@ -89,15 +89,32 @@ class TeamColor {
 
 // ── MVP ───────────────────────────────────────────────────────────────────────
 
-class MvpInfo {
-  final String? playerName;
-  final int?    team;
+class MvpVoteResult {
+  final String playerName;
+  final int    votes;
 
-  const MvpInfo({this.playerName, this.team});
+  const MvpVoteResult({required this.playerName, required this.votes});
+
+  factory MvpVoteResult.fromJson(Map<String, dynamic> j) => MvpVoteResult(
+    playerName: (j['votedForName'] ?? j['playerName'] ?? j['name'] ?? '') as String,
+    votes:      (j['count'] ?? j['votes'] ?? j['voteCount'] ?? 0) as int,
+  );
+}
+
+class MvpInfo {
+  final String?             playerName;
+  final int?                team;
+  final List<MvpVoteResult> results;
+
+  const MvpInfo({this.playerName, this.team, this.results = const []});
 
   factory MvpInfo.fromJson(Map<String, dynamic> j) => MvpInfo(
     playerName: j['playerName'] as String?,
     team:       j['team'] as int?,
+    results:    (j['results'] as List?)
+        ?.whereType<Map<String, dynamic>>()
+        .map(MvpVoteResult.fromJson)
+        .toList() ?? [],
   );
 }
 
@@ -113,10 +130,11 @@ class MatchDetails {
   final List<MatchPlayer> teamAPlayers;
   final List<MatchPlayer> teamBPlayers;
   final List<MatchGoal>  goals;
-  final MvpInfo?         computedMvp;
-  final String?          statusName;
-  final String?          placeName;
-  final DateTime?        playedAt;
+  final MvpInfo?              computedMvp;
+  final List<MvpVoteResult>   voteCounts;
+  final String?               statusName;
+  final String?               placeName;
+  final DateTime?             playedAt;
 
   const MatchDetails({
     required this.matchId,
@@ -129,6 +147,7 @@ class MatchDetails {
     this.teamBPlayers = const [],
     this.goals = const [],
     this.computedMvp,
+    this.voteCounts = const [],
     this.statusName,
     this.placeName,
     this.playedAt,
@@ -182,6 +201,10 @@ class MatchDetails {
       computedMvp:  j['computedMvp'] != null
           ? MvpInfo.fromJson(j['computedMvp'] as Map<String, dynamic>)
           : null,
+      voteCounts:   (j['voteCounts'] as List?)
+          ?.whereType<Map<String, dynamic>>()
+          .map(MvpVoteResult.fromJson)
+          .toList() ?? [],
       statusName:   (j['statusName'] ?? j['status']) as String?,
       placeName:    j['placeName'] as String?,
       playedAt:     AppDateUtils.parse(j['playedAt'] as String?),

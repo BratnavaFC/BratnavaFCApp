@@ -10,6 +10,8 @@ import '../../features/team_colors/presentation/pages/team_colors_page.dart';
 import '../../features/history/presentation/pages/history_page.dart';
 import '../../features/history/presentation/pages/match_details_page.dart';
 import '../../features/players/presentation/pages/players_page.dart';
+import '../../features/group_settings/presentation/pages/group_settings_page.dart';
+import '../../features/birthdays/presentation/pages/birthday_page.dart';
 import '../../features/shell/presentation/pages/shell_page.dart';
 
 // ── Placeholder para rotas ainda não implementadas ────────────────────────────
@@ -114,11 +116,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path:    '/app/birthdays',
-            builder: (_, __) => const _PlaceholderPage('Aniversários'),
+            builder: (_, __) => const BirthdayPage(),
           ),
           GoRoute(
             path:    '/app/settings',
-            builder: (_, __) => const _PlaceholderPage('Configurações'),
+            builder: (_, __) => const GroupSettingsPage(),
           ),
           GoRoute(
             path:    '/app/admin/users',

@@ -116,7 +116,7 @@ class _DayCell extends StatelessWidget {
         decoration: BoxDecoration(
           color: inMonth
               ? (isDark ? Colors.transparent : Colors.transparent)
-              : (isDark ? AppColors.slate900.withOpacity(.4) : AppColors.slate50.withOpacity(.5)),
+              : (isDark ? AppColors.slate900.withValues(alpha: .4) : AppColors.slate50.withValues(alpha: .5)),
           border: Border(
             right:  BorderSide(color: borderColor),
             bottom: BorderSide(color: borderColor),

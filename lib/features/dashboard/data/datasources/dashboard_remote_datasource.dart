@@ -24,10 +24,35 @@ class DashboardRemoteDataSource {
 
   Future<CurrentMatch?> fetchCurrentMatch(String groupId) async {
     try {
+      // Step 1 — lightweight endpoint returns only id, dates, colorIds.
       final res  = await _dio.get(ApiConstants.currentMatch(groupId));
-      final data = unwrapMap(res.data);
-      if (data == null) return null;
-      return CurrentMatch.fromJson(data);
+      final stub = unwrapMap(res.data);
+      if (stub == null) return null;
+
+      // The stub uses "id", not "matchId".
+      final matchId =
+          stub['id'] as String? ?? stub['matchId'] as String? ?? '';
+      if (matchId.isEmpty) return null;
+
+      // Step 2 — full details: teamAColor / teamBColor objects, players, status.
+      try {
+        final detRes =
+            await _dio.get(ApiConstants.matchDetails(groupId, matchId));
+        final details = unwrapMap(detRes.data);
+        if (details != null) {
+          // Merge: stub wins for top-level primitives; details win for lists/objects.
+          final merged = <String, dynamic>{
+            ...stub,
+            ...details,
+            'matchId': matchId,
+          };
+          return CurrentMatch.fromJson(merged);
+        }
+      } catch (_) {
+        // Details unavailable — fall back to stub-only (no colors/players).
+      }
+
+      return CurrentMatch.fromJson({...stub, 'matchId': matchId});
     } on DioException catch (e) {
       if (e.response?.statusCode == 404) return null;
       throw ServerException(extractDioError(e));

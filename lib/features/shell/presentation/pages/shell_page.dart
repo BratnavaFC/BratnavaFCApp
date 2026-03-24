@@ -1,20 +1,58 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/auth/jwt_helper.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../auth/presentation/providers/account_store.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 import '../widgets/app_top_bar.dart';
 
-class ShellPage extends StatelessWidget {
+class ShellPage extends ConsumerStatefulWidget {
   final Widget child;
 
   const ShellPage({super.key, required this.child});
 
+  @override
+  ConsumerState<ShellPage> createState() => _ShellPageState();
+}
+
+class _ShellPageState extends ConsumerState<ShellPage>
+    with WidgetsBindingObserver {
+
   static const _tabs = [
-    _TabItem(icon: Icons.home_outlined,       activeIcon: Icons.home,             label: 'Dashboard', path: '/app'),
-    _TabItem(icon: Icons.sports_soccer_outlined, activeIcon: Icons.sports_soccer, label: 'Partidas',  path: '/app/matches'),
-    _TabItem(icon: Icons.group_outlined,      activeIcon: Icons.group,            label: 'Grupos',    path: '/app/groups'),
-    _TabItem(icon: Icons.history_outlined,    activeIcon: Icons.history,          label: 'Histórico', path: '/app/history'),
-    _TabItem(icon: Icons.more_horiz_outlined, activeIcon: Icons.more_horiz,       label: 'Mais',      path: ''),
+    _TabItem(icon: Icons.home_outlined,          activeIcon: Icons.home,             label: 'Dashboard', path: '/app'),
+    _TabItem(icon: Icons.sports_soccer_outlined, activeIcon: Icons.sports_soccer,    label: 'Partidas',  path: '/app/matches'),
+    _TabItem(icon: Icons.group_outlined,         activeIcon: Icons.group,            label: 'Grupos',    path: '/app/groups'),
+    _TabItem(icon: Icons.history_outlined,       activeIcon: Icons.history,          label: 'Histórico', path: '/app/history'),
+    _TabItem(icon: Icons.more_horiz_outlined,    activeIcon: Icons.more_horiz,       label: 'Mais',      path: ''),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkTokenOnResume();
+    }
+  }
+
+  Future<void> _checkTokenOnResume() async {
+    final account = ref.read(accountStoreProvider).activeAccount;
+    if (account == null) return;
+    if (JwtHelper.isExpiring(account.accessToken, bufferSeconds: 300)) {
+      await ref.read(authNotifierProvider.notifier).proactiveRefresh();
+    }
+  }
 
   int _selectedIndex(BuildContext context) {
     final location = GoRouterState.of(context).uri.path;
@@ -26,11 +64,14 @@ class ShellPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Mantém o serviço de refresh ativo enquanto o shell estiver na tela.
+    ref.watch(tokenRefreshServiceProvider);
+
     final selected = _selectedIndex(context);
 
     return Scaffold(
       appBar: const AppTopBar(),
-      body: child,
+      body: widget.child,
       bottomNavigationBar: NavigationBar(
         selectedIndex: selected,
         onDestinationSelected: (i) {
@@ -42,9 +83,9 @@ class ShellPage extends StatelessWidget {
         },
         destinations: _tabs
             .map((t) => NavigationDestination(
-                  icon:          Icon(t.icon),
-                  selectedIcon:  Icon(t.activeIcon),
-                  label:         t.label,
+                  icon:         Icon(t.icon),
+                  selectedIcon: Icon(t.activeIcon),
+                  label:        t.label,
                 ))
             .toList(),
       ),
@@ -53,8 +94,8 @@ class ShellPage extends StatelessWidget {
 
   void _openDrawer(BuildContext context) {
     showModalBottomSheet(
-      context:             context,
-      isScrollControlled:  true,
+      context:            context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),

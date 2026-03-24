@@ -408,7 +408,7 @@ class _CategoryDropdown extends StatelessWidget {
     ];
 
     return DropdownButtonFormField<String>(
-      value:    value,
+      initialValue: value,
       items:    items,
       onChanged: onChanged,
       decoration: InputDecoration(

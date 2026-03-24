@@ -11,11 +11,18 @@ class TeamColor extends Equatable {
     required this.hexValue,
   });
 
-  factory TeamColor.fromJson(Map<String, dynamic> j) => TeamColor(
-    id:       j['id']       as String? ?? '',
-    name:     j['name']     as String? ?? '',
-    hexValue: j['hexValue'] as String? ?? '#94A3B8',
-  );
+  factory TeamColor.fromJson(Map<String, dynamic> j) {
+    String normalizeHex(String? v) {
+      final s = (v ?? '').trim();
+      if (s.isEmpty) return '#94A3B8';
+      return s.startsWith('#') ? s : '#$s';
+    }
+    return TeamColor(
+      id:       j['id']       as String? ?? '',
+      name:     j['name']     as String? ?? '',
+      hexValue: normalizeHex(j['hexValue'] as String?),
+    );
+  }
 
   @override
   List<Object?> get props => [id, name, hexValue];
@@ -40,14 +47,17 @@ class MatchPlayer extends Equatable {
     required this.inviteResponse,
   });
 
-  factory MatchPlayer.fromJson(Map<String, dynamic> j) => MatchPlayer(
-    matchPlayerId: j['matchPlayerId'] as String? ?? '',
-    playerId:      j['playerId']      as String? ?? '',
-    playerName:    j['playerName']    as String? ?? '',
-    isGoalkeeper:  j['isGoalkeeper']  as bool?   ?? false,
-    team:          j['team']          as int?     ?? 0,
-    inviteResponse: _parseInvite(j['inviteResponse'] as int? ?? 1),
-  );
+  /// [teamOverride] forces the team value (used when player comes from a
+  /// named array like teamAPlayers and does not carry a `team` field).
+  factory MatchPlayer.fromJson(Map<String, dynamic> j, {int? teamOverride}) =>
+      MatchPlayer(
+        matchPlayerId: j['matchPlayerId'] as String? ?? '',
+        playerId:      j['playerId']      as String? ?? '',
+        playerName:    j['playerName']    as String? ?? '',
+        isGoalkeeper:  j['isGoalkeeper']  as bool?   ?? false,
+        team:          teamOverride ?? (j['team'] as int? ?? 0),
+        inviteResponse: _parseInvite(j['inviteResponse'] as int? ?? 1),
+      );
 
   // 1=Pendente  2=Recusado  3=Confirmado  (igual ao site)
   static InviteResponse _parseInvite(int v) => switch (v) {
@@ -89,32 +99,63 @@ class CurrentMatch extends Equatable {
   });
 
   factory CurrentMatch.fromJson(Map<String, dynamic> j) {
-    TeamColor? parseColor(dynamic c) =>
-        c == null ? null : TeamColor.fromJson(c as Map<String, dynamic>);
+    // Parse a nested color object — tries multiple key names the API may use.
+    TeamColor? parseColor(dynamic c) {
+      if (c == null) return null;
+      if (c is Map<String, dynamic>) return TeamColor.fromJson(c);
+      return null;
+    }
 
-    List<MatchPlayer> parsePlayers(dynamic raw) {
-      if (raw == null) return [];
-      return (raw as List)
-          .map((e) => MatchPlayer.fromJson(e as Map<String, dynamic>))
+    // Parse a player list, stamping every player with [team] so counts work
+    // even when the backend omits the `team` field inside each player object.
+    List<MatchPlayer> parsePlayers(dynamic raw, int team) {
+      if (raw == null || raw is! List) return [];
+      return (raw)
+          .whereType<Map<String, dynamic>>()
+          .map((e) => MatchPlayer.fromJson(e, teamOverride: team))
           .toList();
     }
 
+    // Support multiple field-name conventions for colors.
+    final colorARaw = j['teamAColor'] ?? j['colorTeamA'] ?? j['colorA'];
+    final colorBRaw = j['teamBColor'] ?? j['colorTeamB'] ?? j['colorB'];
+
+    // Support multiple field-name conventions for player arrays.
+    final aPlayers = parsePlayers(
+        j['teamAPlayers'] ?? j['playersTeamA'] ?? j['playersA'], 1);
+    final bPlayers = parsePlayers(
+        j['teamBPlayers'] ?? j['playersTeamB'] ?? j['playersB'], 2);
+    final unassigned = parsePlayers(
+        j['unassignedPlayers'] ?? j['pendingPlayers'], 0);
+
+    // Fallback: flat `players` list where each object carries its own `team`.
+    final allPlayers = (aPlayers.isEmpty && bPlayers.isEmpty && unassigned.isEmpty)
+        ? parsePlayers(j['players'] ?? j['matchPlayers'], 0)
+            .map((p) => p.team != 0
+                ? p
+                : MatchPlayer.fromJson(
+                    {'team': 0, 'playerName': p.playerName,
+                     'playerId': p.playerId, 'matchPlayerId': p.matchPlayerId,
+                     'isGoalkeeper': p.isGoalkeeper}))
+            .toList()
+        : [...aPlayers, ...bPlayers, ...unassigned];
+
+    final statusInt  = j['status'] as int? ?? 0;
+    final statusName = j['statusName'] as String?
+        ?? _statusNameFromInt(statusInt);
+
     return CurrentMatch(
-      matchId:    j['matchId']    as String? ?? '',
+      matchId:    j['matchId'] as String? ?? j['id'] as String? ?? '',
       groupId:    j['groupId']    as String? ?? '',
       playedAt:   _parseDate(j['playedAt'] as String?),
       placeName:  j['placeName']  as String? ?? '',
-      status:     j['status']     as int?    ?? 0,
-      statusName: j['statusName'] as String? ?? '',
+      status:     statusInt,
+      statusName: statusName,
       teamAGoals: j['teamAGoals'] as int?    ?? 0,
       teamBGoals: j['teamBGoals'] as int?    ?? 0,
-      teamAColor: parseColor(j['teamAColor']),
-      teamBColor: parseColor(j['teamBColor']),
-      players: [
-        ...parsePlayers(j['teamAPlayers']),
-        ...parsePlayers(j['teamBPlayers']),
-        ...parsePlayers(j['unassignedPlayers']),
-      ],
+      teamAColor: parseColor(colorARaw),
+      teamBColor: parseColor(colorBRaw),
+      players:    allPlayers,
     );
   }
 
@@ -122,11 +163,22 @@ class CurrentMatch extends Equatable {
   List<Object?> get props => [matchId, status, teamAGoals, teamBGoals];
 }
 
-/// .NET retorna UTC sem sufixo 'Z' — igual ao JavaScript, forçamos UTC antes de converter.
+/// Maps the integer status code the API returns to a human-readable label.
+String _statusNameFromInt(int status) => switch (status) {
+  0 => 'Agendada',
+  1 => 'Aceite',
+  2 => 'Aceite',
+  3 => 'Em Jogo',
+  4 => 'Pós-Jogo',
+  5 => 'Encerrada',
+  _ => 'Agendada',
+};
+
+/// Strips timezone suffix, parses as wall-clock time, then subtracts 3 hours
+/// to compensate for the backend always returning times 3 hours ahead (UTC vs UTC-3).
 DateTime _parseDate(String? s) {
   if (s == null || s.isEmpty) return DateTime.now();
-  final hasTimezone = s.contains('Z') || s.contains('+') ||
-      RegExp(r'-\d{2}:\d{2}$').hasMatch(s);
-  final normalized  = hasTimezone ? s : '${s}Z';
-  return DateTime.tryParse(normalized)?.toLocal() ?? DateTime.now();
+  final bare = s.replaceFirst(RegExp(r'Z$|[+-]\d{2}:\d{2}$'), '');
+  final dt = DateTime.tryParse(bare) ?? DateTime.now();
+  return dt.subtract(const Duration(hours: 3));
 }

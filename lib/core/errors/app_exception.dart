@@ -14,8 +14,8 @@ class NetworkException extends AppException {
 
 class UnauthorizedException extends AppException {
   const UnauthorizedException([
-    String message = 'Sessão expirada. Faça login novamente.',
-  ]) : super(message, statusCode: 401);
+    super.message = 'Sessão expirada. Faça login novamente.',
+  ]) : super(statusCode: 401);
 }
 
 class ServerException extends AppException {

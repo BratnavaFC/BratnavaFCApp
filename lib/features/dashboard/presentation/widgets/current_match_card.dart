@@ -49,7 +49,7 @@ class CurrentMatchCard extends StatelessWidget {
               color: AppColors.slate900,
               child: Row(
                 children: [
-                  Icon(Icons.access_time_rounded, size: 14, color: AppColors.slate400),
+                  const Icon(Icons.access_time_rounded, size: 14, color: AppColors.slate400),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
@@ -150,8 +150,8 @@ class CurrentMatchCard extends StatelessWidget {
                                         color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800,
                                       ),
                                     ),
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                                    const Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 4),
                                       child: Text('×', style: TextStyle(color: AppColors.slate500, fontSize: 12)),
                                     ),
                                     Text(
@@ -348,7 +348,7 @@ class _ColorDot extends StatelessWidget {
         shape: BoxShape.circle,
         color: color,
         border: Border.all(
-          color: isWhite ? AppColors.slate300 : Colors.white.withOpacity(.3),
+          color: isWhite ? AppColors.slate300 : Colors.white.withValues(alpha: .3),
           width: 1,
         ),
       ),
@@ -429,10 +429,10 @@ class _MiniShirt extends StatelessWidget {
             color:        color,
             borderRadius: BorderRadius.circular(6),
             boxShadow: [
-              BoxShadow(color: color.withOpacity(.35), blurRadius: 4, offset: const Offset(0, 2)),
+              BoxShadow(color: color.withValues(alpha: .35), blurRadius: 4, offset: const Offset(0, 2)),
             ],
           ),
-          child: Icon(Icons.sports_soccer, size: 14, color: Colors.white.withOpacity(.8)),
+          child: Icon(Icons.sports_soccer, size: 14, color: Colors.white.withValues(alpha: .8)),
         ),
         const SizedBox(width: 8),
         Flexible(

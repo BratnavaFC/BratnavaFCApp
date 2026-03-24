@@ -11,6 +11,7 @@ class Account extends Equatable {
   final String? activePlayerId;
   final List<String> groupAdminIds;
   final List<String> groupFinanceiroIds;
+  final bool keepLoggedIn;
 
   const Account({
     required this.userId,
@@ -23,11 +24,12 @@ class Account extends Equatable {
     this.activePlayerId,
     this.groupAdminIds       = const [],
     this.groupFinanceiroIds  = const [],
+    this.keepLoggedIn        = true,
   });
 
   // ── RBAC helpers ──────────────────────────────────────────────────────────
 
-  bool get isAdmin    => roles.contains('Admin');
+  bool get isAdmin    => roles.any((r) => r.toLowerCase() == 'admin');
 
   bool isGroupAdmin(String groupId)       => groupAdminIds.contains(groupId);
   bool isGroupFinanceiro(String groupId)  => groupFinanceiroIds.contains(groupId);
@@ -53,6 +55,7 @@ class Account extends Equatable {
     'activePlayerId':      activePlayerId,
     'groupAdminIds':       groupAdminIds,
     'groupFinanceiroIds':  groupFinanceiroIds,
+    'keepLoggedIn':        keepLoggedIn,
   };
 
   factory Account.fromJson(Map<String, dynamic> json) => Account(
@@ -66,6 +69,7 @@ class Account extends Equatable {
     activePlayerId:     json['activePlayerId']     as String?,
     groupAdminIds:      List<String>.from(json['groupAdminIds']      as List? ?? []),
     groupFinanceiroIds: List<String>.from(json['groupFinanceiroIds'] as List? ?? []),
+    keepLoggedIn:       json['keepLoggedIn']       as bool? ?? true,
   );
 
   Account copyWith({
@@ -79,6 +83,7 @@ class Account extends Equatable {
     String?       activePlayerId,
     List<String>? groupAdminIds,
     List<String>? groupFinanceiroIds,
+    bool?         keepLoggedIn,
   }) =>
       Account(
         userId:             userId             ?? this.userId,
@@ -91,11 +96,13 @@ class Account extends Equatable {
         activePlayerId:     activePlayerId     ?? this.activePlayerId,
         groupAdminIds:      groupAdminIds      ?? this.groupAdminIds,
         groupFinanceiroIds: groupFinanceiroIds ?? this.groupFinanceiroIds,
+        keepLoggedIn:       keepLoggedIn       ?? this.keepLoggedIn,
       );
 
   @override
   List<Object?> get props => [
     userId, name, email, roles, accessToken, refreshToken,
     activeGroupId, activePlayerId, groupAdminIds, groupFinanceiroIds,
+    keepLoggedIn,
   ];
 }

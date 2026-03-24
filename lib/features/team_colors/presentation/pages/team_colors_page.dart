@@ -26,7 +26,7 @@ class _TeamColorsPageState extends ConsumerState<TeamColorsPage> {
     final groupIdNN = groupId; // non-null alias used in closures
     final canManage = account != null &&
         groupIdNN != null &&
-        (account.isAdmin || account.isGroupAdmin(groupIdNN));
+        (account.isAdmin || account.groupAdminIds.isNotEmpty);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return RefreshIndicator(
@@ -162,13 +162,12 @@ class _Header extends ConsumerWidget {
         : const AsyncValue<List<TeamColor>>.data([]);
 
     final isLoading = colorsAsync.isLoading;
-    final count     = colorsAsync.valueOrNull?.length ?? 0;
+    final count     = colorsAsync.valueOrNull?.where((c) => c.isActive).length ?? 0;
 
     return Container(
-      margin:  const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
           begin:  Alignment.topLeft,
           end:    Alignment.bottomRight,
           colors: [
@@ -177,14 +176,6 @@ class _Header extends ConsumerWidget {
             Color(0xFF0f172a),
           ],
         ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color:      Colors.black.withAlpha(40),
-            blurRadius: 12,
-            offset:     const Offset(0, 4),
-          ),
-        ],
       ),
       child: Row(
         children: [
@@ -247,7 +238,7 @@ class _Header extends ConsumerWidget {
                   )
                 else
                   Text(
-                    '$count cor${count != 1 ? 'es' : ''} cadastrada${count != 1 ? 's' : ''}',
+                    '$count cor${count != 1 ? 'es' : ''} disponív${count != 1 ? 'eis' : 'el'}',
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.white.withAlpha(128),
@@ -389,27 +380,90 @@ class _ColorsBody extends ConsumerWidget {
         final safeIndex = selectedIndex.clamp(0, items.length - 1);
         final selected  = items[safeIndex];
 
-        return Column(
-          children: [
-            _ColorCarousel(
-              items:          items,
-              isDark:         isDark,
-              selectedIndex:  safeIndex,
-              onIndexChanged: onIndexChanged,
-              onTap:          onOpenPreview,
+        return Container(
+          margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+          decoration: BoxDecoration(
+            color:        isDark ? AppColors.slate800 : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isDark ? AppColors.slate700 : AppColors.slate200,
             ),
-            const SizedBox(height: 4),
-            const Divider(height: 1),
-            const SizedBox(height: 12),
-            _ActionBar(
-              selected:   selected,
-              isDark:     isDark,
-              canManage:  canManage,
-              onPreview:  () => onOpenPreview(selected),
-              onEdit:     () => onOpenEdit(selected),
-              onActivate: () => onActivate(selected),
-            ),
-          ],
+          ),
+          child: Column(
+            children: [
+              // ── "Ver selecionado" row ──────────────────────────────
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: GestureDetector(
+                    onTap: () => onOpenPreview(selected),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: isDark
+                              ? AppColors.slate600
+                              : AppColors.slate300,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.visibility_outlined,
+                            size:  14,
+                            color: isDark
+                                ? AppColors.slate300
+                                : AppColors.slate600,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            'Ver selecionado',
+                            style: TextStyle(
+                              fontSize:   12,
+                              fontWeight: FontWeight.w500,
+                              color: isDark
+                                  ? AppColors.slate300
+                                  : AppColors.slate600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              // ── Carousel ──────────────────────────────────────────
+              _ColorCarousel(
+                items:          items,
+                isDark:         isDark,
+                selectedIndex:  safeIndex,
+                onIndexChanged: onIndexChanged,
+                onTap:          onOpenPreview,
+              ),
+
+              // ── Action bar ─────────────────────────────────────────
+              if (canManage) ...[
+                Divider(
+                  height: 1,
+                  color: isDark ? AppColors.slate700 : AppColors.slate200,
+                ),
+                _ActionBar(
+                  selected:   selected,
+                  isDark:     isDark,
+                  canManage:  canManage,
+                  onPreview:  () => onOpenPreview(selected),
+                  onEdit:     () => onOpenEdit(selected),
+                  onActivate: () => onActivate(selected),
+                ),
+              ] else
+                const SizedBox(height: 12),
+            ],
+          ),
         );
       },
     );
@@ -440,27 +494,39 @@ class _ColorCarousel extends StatefulWidget {
 class _ColorCarouselState extends State<_ColorCarousel> {
   late PageController _ctrl;
 
+  // Large multiplier so the virtual list feels infinite in both directions.
+  static const int _kMult = 10000;
+
+  int get _midOffset => widget.items.length * (_kMult ~/ 2);
+
   @override
   void initState() {
     super.initState();
     _ctrl = PageController(
-      viewportFraction: 0.78,
-      initialPage: widget.selectedIndex,
+      viewportFraction: 0.75,
+      initialPage: _midOffset + widget.selectedIndex,
     );
   }
 
   @override
   void didUpdateWidget(_ColorCarousel old) {
     super.didUpdateWidget(old);
-    // Sync external selection changes (e.g. activate button)
-    if (old.selectedIndex != widget.selectedIndex &&
-        _ctrl.hasClients &&
-        _ctrl.page?.round() != widget.selectedIndex) {
-      _ctrl.animateToPage(
-        widget.selectedIndex,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
+    if (old.selectedIndex != widget.selectedIndex && _ctrl.hasClients) {
+      final currentVirtual = _ctrl.page?.round() ?? _midOffset;
+      final n = widget.items.length;
+      final currentReal = currentVirtual % n;
+      if (currentReal != widget.selectedIndex) {
+        // External selection change — jump to the nearest virtual page.
+        final diff   = (widget.selectedIndex - currentReal + n) % n;
+        final target = diff <= n ~/ 2
+            ? currentVirtual + diff
+            : currentVirtual - (n - diff);
+        _ctrl.animateToPage(
+          target,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+      }
     }
   }
 
@@ -471,57 +537,53 @@ class _ColorCarouselState extends State<_ColorCarousel> {
   }
 
   void _goLeft() {
-    if (widget.selectedIndex > 0) {
-      _ctrl.animateToPage(
-        widget.selectedIndex - 1,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
-    }
+    final current = _ctrl.page?.round() ?? _midOffset;
+    _ctrl.animateToPage(
+      current - 1,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
   }
 
   void _goRight() {
-    if (widget.selectedIndex < widget.items.length - 1) {
-      _ctrl.animateToPage(
-        widget.selectedIndex + 1,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
-    }
+    final current = _ctrl.page?.round() ?? _midOffset;
+    _ctrl.animateToPage(
+      current + 1,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final items = widget.items;
+    final n     = items.length;
 
     return Column(
       children: [
-        // Carousel: PageView with clip.none so neighbour cards peek through,
-        // arrows overlaid in a Stack so they don't constrain the PageView.
         SizedBox(
           height: 310,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              // PageView takes full width; viewportFraction < 1 makes
-              // the current card narrower, letting neighbours show.
               AnimatedBuilder(
                 animation: _ctrl,
                 builder: (_, __) {
                   return PageView.builder(
-                    controller:    _ctrl,
-                    clipBehavior:  Clip.none,
-                    itemCount:     items.length,
-                    onPageChanged: widget.onIndexChanged,
-                    itemBuilder: (context, index) {
-                      final color      = items[index];
-                      final isSelected = index == widget.selectedIndex;
+                    controller:   _ctrl,
+                    clipBehavior: Clip.none,
+                    itemCount:    n * _kMult,
+                    onPageChanged: (virtualIndex) =>
+                        widget.onIndexChanged(virtualIndex % n),
+                    itemBuilder: (context, virtualIndex) {
+                      final realIndex  = virtualIndex % n;
+                      final color      = items[realIndex];
+                      final isSelected = realIndex == widget.selectedIndex;
 
-                      // Scale: centre = 1.0, immediate neighbours = 0.88
                       double scale = 0.88;
                       if (_ctrl.hasClients && _ctrl.position.haveDimensions) {
-                        final page  = _ctrl.page ?? widget.selectedIndex.toDouble();
-                        final delta = (page - index).abs().clamp(0.0, 1.0);
+                        final page  = _ctrl.page ?? (_midOffset + widget.selectedIndex).toDouble();
+                        final delta = (page - virtualIndex).abs().clamp(0.0, 1.0);
                         scale = 1.0 - delta * 0.12;
                       } else {
                         scale = isSelected ? 1.0 : 0.88;
@@ -535,7 +597,7 @@ class _ColorCarouselState extends State<_ColorCarousel> {
                               widget.onTap(color);
                             } else {
                               _ctrl.animateToPage(
-                                index,
+                                virtualIndex,
                                 duration: const Duration(milliseconds: 300),
                                 curve: Curves.easeInOut,
                               );
@@ -553,30 +615,26 @@ class _ColorCarouselState extends State<_ColorCarousel> {
                 },
               ),
 
-              // Left arrow — overlaid, doesn't constrain PageView
+              // Left arrow — always enabled (circular)
               Positioned(
-                left: 0,
-                top:  0,
-                bottom: 0,
+                left: 0, top: 0, bottom: 0,
                 child: Center(
                   child: _NavArrow(
                     icon:    Icons.chevron_left_rounded,
-                    enabled: widget.selectedIndex > 0,
+                    enabled: true,
                     isDark:  widget.isDark,
                     onTap:   _goLeft,
                   ),
                 ),
               ),
 
-              // Right arrow
+              // Right arrow — always enabled (circular)
               Positioned(
-                right: 0,
-                top:   0,
-                bottom: 0,
+                right: 0, top: 0, bottom: 0,
                 child: Center(
                   child: _NavArrow(
                     icon:    Icons.chevron_right_rounded,
-                    enabled: widget.selectedIndex < items.length - 1,
+                    enabled: true,
                     isDark:  widget.isDark,
                     onTap:   _goRight,
                   ),
@@ -735,14 +793,14 @@ class _ColorCard extends StatelessWidget {
             // Colored top strip
             Container(height: 4, color: teamColor),
 
-            // Jersey stage
+            // Jersey stage — dark gradient like website
             Expanded(
               child: Container(
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
                     begin:  Alignment.topCenter,
                     end:    Alignment.bottomCenter,
-                    colors: [Colors.white, Colors.black],
+                    colors: [Color(0xFF4B5563), Color(0xFF111827)],
                   ),
                 ),
                 child: Center(
@@ -757,46 +815,55 @@ class _ColorCard extends StatelessWidget {
               ),
             ),
 
-            // Info section
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            // Info section — matches site layout
+            Container(
+              color: isDark ? AppColors.slate900 : Colors.white,
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    color.name,
-                    style: TextStyle(
-                      fontSize:   14,
-                      fontWeight: FontWeight.w700,
-                      color: isDark ? Colors.white : AppColors.slate900,
-                    ),
-                    maxLines:  1,
-                    overflow:  TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 6),
+                  // Name row with badges
                   Row(
                     children: [
-                      // Ativo badge
+                      Expanded(
+                        child: Text(
+                          color.name,
+                          style: TextStyle(
+                            fontSize:   14,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? Colors.white : AppColors.slate900,
+                          ),
+                          maxLines:  1,
+                          overflow:  TextOverflow.ellipsis,
+                        ),
+                      ),
                       if (color.isActive)
                         const _Badge(
-                          label:   'Ativo',
-                          bg:      Color(0xFFecfdf5),
-                          fg:      Color(0xFF059669),
-                        )
-                      else
-                        _Badge(
-                          label:   'Inativo',
-                          bg:      isDark ? AppColors.slate800 : AppColors.slate100,
-                          fg:      isDark ? AppColors.slate400 : AppColors.slate500,
+                          label: 'Ativo',
+                          bg:    Color(0xFFecfdf5),
+                          fg:    Color(0xFF059669),
                         ),
-                      const SizedBox(width: 6),
-                      // Hex badge
-                      _Badge(
-                        label: color.hexValue.toUpperCase(),
-                        bg:    isDark ? AppColors.slate800 : AppColors.slate100,
-                        fg:    isDark ? AppColors.slate400 : AppColors.slate600,
-                      ),
+                      if (isSelected) ...[
+                        const SizedBox(width: 4),
+                        const _Badge(
+                          label: 'Sel.',
+                          bg:    Color(0xFF1e293b),
+                          fg:    Colors.white,
+                        ),
+                      ],
                     ],
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'CLIQUE PARA SELECIONAR',
+                    style: TextStyle(
+                      fontSize:      9,
+                      fontWeight:    FontWeight.w600,
+                      letterSpacing: 0.5,
+                      color: isSelected
+                          ? teamColor
+                          : (isDark ? AppColors.slate500 : AppColors.slate400),
+                    ),
                   ),
                 ],
               ),
@@ -957,13 +1024,13 @@ class _ActionBar extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: _ActionButton(
-                    label: selected.isActive ? 'Desativar' : 'Ativar',
+                    label: selected.isActive ? 'Inativar' : 'Ativar',
                     icon:  selected.isActive
-                        ? Icons.toggle_on_rounded
-                        : Icons.toggle_off_rounded,
+                        ? Icons.power_settings_new_rounded
+                        : Icons.check_circle_outline_rounded,
                     isDark:   isDark,
                     accent:   selected.isActive
-                        ? const Color(0xFFef4444)
+                        ? const Color(0xFFf97316)   // orange – matches website
                         : const Color(0xFF22c55e),
                     onTap:    onActivate,
                   ),
@@ -1128,7 +1195,7 @@ class _PreviewSheet extends StatelessWidget {
 
             // Jersey stage
             Container(
-              height: 220,
+              height: 190,
               decoration: BoxDecoration(
                 gradient: RadialGradient(
                   center: Alignment.center,
@@ -1257,84 +1324,11 @@ class _EditSheetState extends State<_EditSheet> {
     return null;
   }
 
-  /// Abre o color picker num dialog e atualiza [_hexCtrl] com a cor escolhida.
-  Future<void> _openColorPicker() async {
-    Color picked = _liveColor;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          titlePadding: EdgeInsets.zero,
-          contentPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Container(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Color(0xFF0f172a), Color(0xFF1e293b)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.colorize_rounded, color: Colors.white, size: 18),
-                const SizedBox(width: 8),
-                const Expanded(
-                  child: Text(
-                    'Escolher cor',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () => Navigator.pop(ctx, false),
-                  child: const Icon(Icons.close_rounded, color: Colors.white60, size: 20),
-                ),
-              ],
-            ),
-          ),
-          content: StatefulBuilder(
-            builder: (ctx2, setStateInner) => Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: 12),
-                ColorPicker(
-                  pickerColor:        picked,
-                  onColorChanged:     (c) { picked = c; setStateInner(() {}); },
-                  enableAlpha:        false,
-                  displayThumbColor:  true,
-                  pickerAreaHeightPercent: 0.55,
-                  hexInputBar:        true,
-                  labelTypes:         const [],
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancelar'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Confirmar'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirmed == true && mounted) {
-      final r = ((picked.r * 255).round()).toRadixString(16).padLeft(2, '0');
-      final g = ((picked.g * 255).round()).toRadixString(16).padLeft(2, '0');
-      final b = ((picked.b * 255).round()).toRadixString(16).padLeft(2, '0');
-      setState(() => _hexCtrl.text = '#$r$g$b');
-    }
+  void _onPickerColorChanged(Color c) {
+    final r = ((c.r * 255).round()).toRadixString(16).padLeft(2, '0');
+    final g = ((c.g * 255).round()).toRadixString(16).padLeft(2, '0');
+    final b = ((c.b * 255).round()).toRadixString(16).padLeft(2, '0');
+    _hexCtrl.text = '#$r$g$b';
   }
 
   @override
@@ -1456,17 +1450,32 @@ class _EditSheetState extends State<_EditSheet> {
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: Text(
-                            _nameCtrl.text.isEmpty
-                                ? (_isEdit ? 'Editar cor' : 'Nova cor')
-                                : _nameCtrl.text,
-                            style: const TextStyle(
-                              fontSize:   18,
-                              fontWeight: FontWeight.w800,
-                              color:      Colors.white,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _isEdit ? 'EDITAR COR' : 'NOVA COR',
+                                style: const TextStyle(
+                                  fontSize:      11,
+                                  fontWeight:    FontWeight.w500,
+                                  color:         Color(0xFF94A3B8),
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _nameCtrl.text.isEmpty
+                                    ? (_isEdit ? 'Editar cor' : 'Nova cor')
+                                    : _nameCtrl.text,
+                                style: const TextStyle(
+                                  fontSize:   18,
+                                  fontWeight: FontWeight.w800,
+                                  color:      Colors.white,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                           ),
                         ),
                         GestureDetector(
@@ -1500,77 +1509,116 @@ class _EditSheetState extends State<_EditSheet> {
                           Container(
                             height: 130,
                             decoration: BoxDecoration(
-                              color:        isDark ? AppColors.slate800 : AppColors.slate50,
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
                                 color: isDark ? AppColors.slate700 : AppColors.slate200,
                               ),
                             ),
-                            child: Row(
-                              children: [
-                                // Jersey stage
-                                Expanded(
-                                  child: Container(
-                                    decoration: const BoxDecoration(
-                                      gradient: LinearGradient(
-                                        begin:  Alignment.topCenter,
-                                        end:    Alignment.bottomCenter,
-                                        colors: [Colors.white, Colors.black],
-                                      ),
-                                      borderRadius: BorderRadius.only(
-                                        topLeft:     Radius.circular(13),
-                                        bottomLeft:  Radius.circular(13),
-                                      ),
-                                    ),
-                                    child: Center(
-                                      child: FractionallySizedBox(
-                                        widthFactor: 0.55,
-                                        child: AspectRatio(
-                                          aspectRatio: 240 / 220,
-                                          child: _JerseyWidget(color: liveC),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(13),
+                              child: Row(
+                                children: [
+                                  // Jersey stage — dark gradient like website
+                                  Expanded(
+                                    child: Container(
+                                      decoration: const BoxDecoration(
+                                        gradient: LinearGradient(
+                                          begin:  Alignment.topCenter,
+                                          end:    Alignment.bottomCenter,
+                                          colors: [Color(0xFF4B5563), Color(0xFF111827)],
                                         ),
                                       ),
-                                    ),
-                                  ),
-                                ),
-                                // Info
-                                Padding(
-                                  padding: const EdgeInsets.all(14),
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Container(
-                                        width: 28, height: 28,
-                                        decoration: BoxDecoration(
-                                          color:        liveC,
-                                          borderRadius: BorderRadius.circular(8),
-                                          border: Border.all(
-                                            color: isDark ? AppColors.slate600 : AppColors.slate300,
+                                      child: Center(
+                                        child: FractionallySizedBox(
+                                          widthFactor: 0.55,
+                                          child: AspectRatio(
+                                            aspectRatio: 240 / 220,
+                                            child: _JerseyWidget(color: liveC),
                                           ),
                                         ),
                                       ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        _hexCtrl.text.toUpperCase(),
-                                        style: TextStyle(
-                                          fontSize:   11,
-                                          fontFamily: 'monospace',
-                                          fontWeight: FontWeight.w600,
-                                          color: isDark ? AppColors.slate300 : AppColors.slate700,
-                                        ),
-                                      ),
-                                    ],
+                                    ),
                                   ),
-                                ),
-                              ],
+                                  // Info sidebar
+                                  Container(
+                                    color: isDark ? AppColors.slate800 : AppColors.slate50,
+                                    padding: const EdgeInsets.all(14),
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        AnimatedContainer(
+                                          duration: const Duration(milliseconds: 200),
+                                          width: 28, height: 28,
+                                          decoration: BoxDecoration(
+                                            color:        liveC,
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(
+                                              color: isDark
+                                                  ? AppColors.slate600
+                                                  : AppColors.slate300,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          _hexCtrl.text.toUpperCase(),
+                                          style: TextStyle(
+                                            fontSize:   11,
+                                            fontFamily: 'monospace',
+                                            fontWeight: FontWeight.w600,
+                                            color: isDark
+                                                ? AppColors.slate300
+                                                : AppColors.slate700,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          _nameCtrl.text.isEmpty
+                                              ? '—'
+                                              : _nameCtrl.text,
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            color: isDark
+                                                ? AppColors.slate500
+                                                : AppColors.slate400,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
 
                           const SizedBox(height: 16),
 
+                          // Inline color picker
+                          Text(
+                            'ESCOLHER COR',
+                            style: TextStyle(
+                              fontSize:      11,
+                              fontWeight:    FontWeight.w600,
+                              letterSpacing: 0.5,
+                              color: isDark ? AppColors.slate500 : AppColors.slate400,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          ColorPicker(
+                            pickerColor:             liveC,
+                            onColorChanged:          _onPickerColorChanged,
+                            enableAlpha:             false,
+                            displayThumbColor:       true,
+                            pickerAreaHeightPercent: 0.45,
+                            hexInputBar:             false,
+                            labelTypes:              const [],
+                          ),
+
+                          const SizedBox(height: 12),
+
                           // Name field
-                          _label('Nome da cor', isDark),
+                          _label('Nome', isDark),
                           const SizedBox(height: 6),
                           _field(
                             controller: _nameCtrl,
@@ -1580,45 +1628,11 @@ class _EditSheetState extends State<_EditSheet> {
 
                           const SizedBox(height: 14),
 
-                          // Hex field + color picker button
-                          _label('Código Hex', isDark),
+                          // Hex field with color swatch
+                          _label('Hex (RGB)', isDark),
                           const SizedBox(height: 6),
                           Row(
                             children: [
-                              // Tapping the swatch opens the color picker
-                              Tooltip(
-                                message: 'Abrir seletor de cor',
-                                child: GestureDetector(
-                                  onTap: _openColorPicker,
-                                  child: AnimatedContainer(
-                                    duration: const Duration(milliseconds: 200),
-                                    width:  40,
-                                    height: 40,
-                                    decoration: BoxDecoration(
-                                      color:        liveC,
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(
-                                        color: isDark ? AppColors.slate600 : AppColors.slate300,
-                                      ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color:      liveC.withAlpha(80),
-                                          blurRadius: 8,
-                                          spreadRadius: 1,
-                                        ),
-                                      ],
-                                    ),
-                                    child: Icon(
-                                      Icons.colorize_rounded,
-                                      size:  16,
-                                      color: liveC.computeLuminance() > 0.5
-                                          ? Colors.black54
-                                          : Colors.white70,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 10),
                               Expanded(
                                 child: _field(
                                   controller: _hexCtrl,
@@ -1626,7 +1640,32 @@ class _EditSheetState extends State<_EditSheet> {
                                   isDark:     isDark,
                                 ),
                               ),
+                              const SizedBox(width: 10),
+                              AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                width: 40, height: 40,
+                                decoration: BoxDecoration(
+                                  color:        liveC,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: isDark
+                                        ? AppColors.slate600
+                                        : AppColors.slate300,
+                                  ),
+                                ),
+                              ),
                             ],
+                          ),
+
+                          const SizedBox(height: 8),
+                          Text(
+                            _isEdit
+                                ? 'Atualiza nome e cor do uniforme selecionado.'
+                                : 'Cria uma nova cor no grupo.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDark ? AppColors.slate500 : AppColors.slate400,
+                            ),
                           ),
 
                           const SizedBox(height: 24),
@@ -1681,9 +1720,9 @@ class _EditSheetState extends State<_EditSheet> {
                                             color: Colors.white,
                                           ),
                                         )
-                                      : Text(
-                                          _isEdit ? 'Salvar' : 'Criar cor',
-                                          style: const TextStyle(
+                                      : const Text(
+                                          'Salvar',
+                                          style: TextStyle(
                                             fontWeight: FontWeight.w600,
                                           ),
                                         ),

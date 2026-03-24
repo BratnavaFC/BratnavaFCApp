@@ -7,9 +7,11 @@ class ApiConstants {
 
   // Users
   static const String users = '/api/Users';
+  static String userById(String id) => '/api/Users/$id';
 
   // Groups
   static const String groups = '/api/Groups';
+  static String groupById(String id) => '/api/Groups/$id';
   static String groupsByAdmin(String adminId) =>
       '/api/Groups/admin/$adminId';
   static String groupsByFinanceiro(String finId) =>
@@ -18,6 +20,10 @@ class ApiConstants {
   // Players
   static const String playersMe = '/api/Players/mine';
   static String playerById(String id) => '/api/Players/$id';
+  static String birthdayStatus(String groupId) =>
+      '/api/Players/group/$groupId/birthday-status';
+  static String visualStats(String groupId) =>
+      '/api/TeamGeneration/visual-stats/$groupId';
 
   // Players (group admin)
   static String groupPlayers(String groupId) => '/api/Players/group/$groupId';
@@ -48,6 +54,21 @@ class ApiConstants {
       '/api/Calendar/group/$groupId/categories';
   static String calendarCategoryById(String groupId, String id) =>
       '/api/Calendar/group/$groupId/categories/$id';
+
+  // Users – mutations
+  static String changePassword(String id) => '/api/Users/$id/change-password';
+  static String deactivateUser(String id)  => '/api/Users/$id/deactivate';
+  static String activateUser(String id)    => '/api/Users/$id/activate';
+
+  // Group settings (separate resource from group detail)
+  static String groupSettings(String groupId) => '/api/GroupSettings/group/$groupId';
+
+  // Group members management
+  static String groupAdmins(String id)                      => '/api/Groups/$id/admins';
+  static String groupAdminById(String id, String uid)       => '/api/Groups/$id/admins/$uid';
+  static String groupFinanceiros(String id)                 => '/api/Groups/$id/financeiros';
+  static String groupFinanceiroById(String id, String uid)  => '/api/Groups/$id/financeiros/$uid';
+  static String usersSearch(String q)                       => '/api/Users?search=${Uri.encodeComponent(q)}';
 
   // Team Colors
   static String teamColors(String groupId) => '/api/TeamColor/group/$groupId';

@@ -138,11 +138,11 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
         border:       const Border.fromBorderSide(
             BorderSide(color: AppColors.emerald200)),
       ),
-      child: Row(
+      child: const Row(
         children: [
-          const Icon(Icons.check_circle_rounded,
+          Icon(Icons.check_circle_rounded,
               color: AppColors.emerald700, size: 24),
-          const SizedBox(width: 12),
+          SizedBox(width: 12),
           Expanded(
             child: Text(
               'Usuário criado! Faça login.',
@@ -171,7 +171,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
             ? null
             : [
                 BoxShadow(
-                  color:      Colors.black.withOpacity(0.04),
+                  color:      Colors.black.withValues(alpha: 0.04),
                   blurRadius: 8,
                   offset:     const Offset(0, 2),
                 ),

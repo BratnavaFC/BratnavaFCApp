@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -14,8 +16,26 @@ class DashboardPage extends ConsumerStatefulWidget {
 }
 
 class _DashboardPageState extends ConsumerState<DashboardPage> {
-  bool _refreshingMatch  = false;
-  bool _refreshingRecent = false;
+  bool   _refreshingMatch  = false;
+  bool   _refreshingRecent = false;
+  Timer? _matchTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    // Auto-refresh current match every 30 s so live data stays current.
+    _matchTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      final groupId =
+          ref.read(accountStoreProvider).activeAccount?.activeGroupId ?? '';
+      if (groupId.isNotEmpty) ref.invalidate(currentMatchProvider(groupId));
+    });
+  }
+
+  @override
+  void dispose() {
+    _matchTimer?.cancel();
+    super.dispose();
+  }
 
   Future<void> _refreshMatch(String groupId) async {
     if (_refreshingMatch) return;
@@ -78,7 +98,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             // ── Partida atual ───────────────────────────────────────────────
             _SectionCard(
               isDark: isDark,
-              iconBg: const Color(0xFF3B82F6).withOpacity(.1),
+              iconBg: const Color(0xFF3B82F6).withValues(alpha: .1),
               iconColor: AppColors.blue600,
               iconData: Icons.calendar_today_rounded,
               title: 'Partida atual',
@@ -96,7 +116,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             // ── Últimas partidas ────────────────────────────────────────────
             _SectionCard(
               isDark: isDark,
-              iconBg: const Color(0xFF8B5CF6).withOpacity(.1),
+              iconBg: const Color(0xFF8B5CF6).withValues(alpha: .1),
               iconColor: AppColors.violet600,
               iconData: Icons.history_rounded,
               title: activePlayer != null
@@ -126,7 +146,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     if (async == null) return const SizedBox.shrink();
 
     return async.when(
-      loading: () => _Skeleton(height: 120),
+      loading: () => const _Skeleton(height: 120),
       error:   (_, __) => _DashedEmpty(
         icon: Icons.calendar_today_outlined,
         title: 'Nenhuma partida em andamento',
@@ -159,7 +179,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
 
     return async.when(
       loading: () => Column(
-        children: List.generate(3, (_) => _Skeleton(height: 76, bottom: 8)),
+        children: List.generate(3, (_) => const _Skeleton(height: 76, bottom: 8)),
       ),
       error: (e, _) => _CenteredMsg(msg: e.toString(), isDark: isDark),
       data: (matches) {
@@ -207,7 +227,7 @@ class _DashboardHeader extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color:  Colors.black.withOpacity(.18),
+            color:  Colors.black.withValues(alpha: .18),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -219,9 +239,9 @@ class _DashboardHeader extends StatelessWidget {
           Container(
             width: 52, height: 52,
             decoration: BoxDecoration(
-              color:        Colors.white.withOpacity(.1),
+              color:        Colors.white.withValues(alpha: .1),
               borderRadius: BorderRadius.circular(14),
-              border:       Border.all(color: Colors.white.withOpacity(.2)),
+              border:       Border.all(color: Colors.white.withValues(alpha: .2)),
             ),
             child: const Icon(Icons.dashboard_rounded, size: 26, color: Colors.white),
           ),
@@ -244,7 +264,7 @@ class _DashboardHeader extends StatelessWidget {
                 Text(
                   subtitle,
                   style: TextStyle(
-                    color:    Colors.white.withOpacity(.5),
+                    color:    Colors.white.withValues(alpha: .5),
                     fontSize: 13,
                   ),
                   overflow: TextOverflow.ellipsis,
@@ -282,7 +302,7 @@ class _SectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cardBg     = isDark ? AppColors.slate900 : Colors.white;
-    final headerBg   = isDark ? AppColors.slate800.withOpacity(.8) : AppColors.slate50.withOpacity(.9);
+    final headerBg   = isDark ? AppColors.slate800.withValues(alpha: .8) : AppColors.slate50.withValues(alpha: .9);
     final borderColor = isDark ? AppColors.slate700 : AppColors.slate200;
     final divColor    = isDark ? AppColors.slate800 : AppColors.slate100;
 
@@ -293,7 +313,7 @@ class _SectionCard extends StatelessWidget {
         border:       Border.all(color: borderColor),
         boxShadow: [
           BoxShadow(
-            color:  Colors.black.withOpacity(.03),
+            color:  Colors.black.withValues(alpha: .03),
             blurRadius: 4,
             offset: const Offset(0, 1),
           ),
@@ -375,7 +395,7 @@ class _RefreshBtn extends StatelessWidget {
               color: isDark ? AppColors.slate700 : AppColors.slate200,
             ),
             boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(.04), blurRadius: 2),
+              BoxShadow(color: Colors.black.withValues(alpha: .04), blurRadius: 2),
             ],
           ),
           child: Row(

@@ -62,9 +62,9 @@ List<DateTime> getWeekDays(DateTime cursor) {
         try {
           final base = Color(int.parse('0xFF$hex'));
           return (
-            bg:     Color.fromARGB(30,  base.red, base.green, base.blue),
+            bg:     Color.fromARGB(30,  (base.r * 255.0).round(), (base.g * 255.0).round(), (base.b * 255.0).round()),
             fg:     base,
-            border: Color.fromARGB(80,  base.red, base.green, base.blue),
+            border: Color.fromARGB(80,  (base.r * 255.0).round(), (base.g * 255.0).round(), (base.b * 255.0).round()),
           );
         } catch (_) {}
       }
@@ -86,7 +86,7 @@ String eventIcon(CalendarEvent ev) {
 
 Color? dotColor(CalendarEvent ev) {
   final c = eventColors(ev);
-  return c.fg.withOpacity(.8);
+  return c.fg.withValues(alpha: .8);
 }
 
 // ── EventPill ─────────────────────────────────────────────────────────────────

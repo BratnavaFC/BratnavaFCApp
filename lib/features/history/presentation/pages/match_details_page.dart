@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../auth/presentation/providers/account_store.dart';
 import '../../domain/entities/match_details.dart';
 import '../providers/history_provider.dart';
 
@@ -27,6 +28,9 @@ class _MatchDetailsPageState extends ConsumerState<MatchDetailsPage> {
   @override
   Widget build(BuildContext context) {
     final isDark   = Theme.of(context).brightness == Brightness.dark;
+    final account  = ref.watch(accountStoreProvider).activeAccount;
+    final isAdmin  = account != null &&
+        (account.isAdmin || account.groupAdminIds.isNotEmpty);
     final async    = ref.watch(matchDetailsProvider(
       (groupId: widget.groupId, matchId: widget.matchId),
     ));
@@ -62,6 +66,7 @@ class _MatchDetailsPageState extends ConsumerState<MatchDetailsPage> {
       data: (data) => _DetailsBody(
         data:          data,
         isDark:        isDark,
+        isAdmin:       isAdmin,
         goalsTab:      _goalsTab,
         onGoalsTab:    (t) => setState(() => _goalsTab = t),
         onBack:        () => context.go('/app/history'),
@@ -75,6 +80,7 @@ class _MatchDetailsPageState extends ConsumerState<MatchDetailsPage> {
 class _DetailsBody extends StatelessWidget {
   final MatchDetails data;
   final bool         isDark;
+  final bool         isAdmin;
   final int          goalsTab;
   final void Function(int) onGoalsTab;
   final VoidCallback onBack;
@@ -82,6 +88,7 @@ class _DetailsBody extends StatelessWidget {
   const _DetailsBody({
     required this.data,
     required this.isDark,
+    required this.isAdmin,
     required this.goalsTab,
     required this.onGoalsTab,
     required this.onBack,
@@ -204,6 +211,20 @@ class _DetailsBody extends StatelessWidget {
                 bName:     bName,
                 isDark:    isDark,
               ),
+
+              // MVP section (only when match has MVP data)
+              if (data.computedMvp?.playerName != null) ...[
+                const SizedBox(height: 12),
+                _SectionHeader(title: 'MVP', isDark: isDark),
+                _MvpSection(
+                  mvp:        data.computedMvp!,
+                  voteCounts: data.voteCounts,
+                  aName:      aName,
+                  bName:      bName,
+                  isAdmin:    isAdmin,
+                  isDark:     isDark,
+                ),
+              ],
 
               const SizedBox(height: 32),
             ],
@@ -982,6 +1003,210 @@ class _ColorSwatch extends StatelessWidget {
   }
 }
 
+// ── MVP section ───────────────────────────────────────────────────────────────
+
+class _MvpSection extends StatelessWidget {
+  final MvpInfo              mvp;
+  final List<MvpVoteResult>  voteCounts;
+  final String               aName;
+  final String               bName;
+  final bool                 isAdmin;
+  final bool                 isDark;
+
+  const _MvpSection({
+    required this.mvp,
+    required this.voteCounts,
+    required this.aName,
+    required this.bName,
+    required this.isAdmin,
+    required this.isDark,
+  });
+
+  String get _teamName {
+    if (mvp.team == 1) return aName;
+    if (mvp.team == 2) return bName;
+    return '';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const gold       = Color(0xFFd97706);
+    const goldLight  = Color(0xFFFEF3C7);
+    const goldBorder = Color(0xFFFDE68A);
+
+    final maxVotes = voteCounts.isEmpty
+        ? 1
+        : voteCounts.map((r) => r.votes).reduce((a, b) => a > b ? a : b);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ── Winner card (user only) ──────────────────────────────
+          if (!isAdmin) Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color:        isDark ? const Color(0xFF1c1208) : goldLight,
+              borderRadius: BorderRadius.circular(12),
+              border:       Border.all(
+                color: isDark ? gold.withAlpha(80) : goldBorder,
+              ),
+            ),
+            child: Row(
+              children: [
+                // Trophy icon
+                Container(
+                  width: 42, height: 42,
+                  decoration: BoxDecoration(
+                    color:  gold.withAlpha(isDark ? 40 : 30),
+                    shape:  BoxShape.circle,
+                  ),
+                  child: const Center(
+                    child: Text('🏆', style: TextStyle(fontSize: 20)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'MELHOR DO JOGO',
+                      style: TextStyle(
+                        fontSize:   10,
+                        fontWeight: FontWeight.w700,
+                        color:      Color(0xFFd97706),
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      mvp.playerName!,
+                      style: TextStyle(
+                        fontSize:   16,
+                        fontWeight: FontWeight.w800,
+                        color:      isDark ? Colors.white : const Color(0xFF0f172a),
+                      ),
+                    ),
+                    if (_teamName.isNotEmpty)
+                      Text(
+                        _teamName,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color:    gold,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // ── Vote breakdown (admin only) ─────────────────────────
+          if (isAdmin) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color:        isDark ? AppColors.slate800 : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border:       Border.all(
+                  color: isDark ? AppColors.slate700 : AppColors.slate200,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'APURAÇÃO DE VOTOS',
+                    style: TextStyle(
+                      fontSize:   10,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.8,
+                      color: isDark ? AppColors.slate400 : AppColors.slate500,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (voteCounts.isEmpty)
+                    Text(
+                      'Sem dados de votação',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: isDark ? AppColors.slate500 : AppColors.slate400,
+                      ),
+                    ),
+                  ...voteCounts.map((r) {
+                    final isWinner  = r.playerName == mvp.playerName;
+                    final barFrac   = maxVotes > 0 ? r.votes / maxVotes : 0.0;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        children: [
+                          if (isWinner)
+                            const Padding(
+                              padding: EdgeInsets.only(right: 4),
+                              child: Text('🏆', style: TextStyle(fontSize: 12)),
+                            )
+                          else
+                            const SizedBox(width: 20),
+                          SizedBox(
+                            width: 100,
+                            child: Text(
+                              r.playerName,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize:   13,
+                                fontWeight: isWinner
+                                    ? FontWeight.w600
+                                    : FontWeight.w400,
+                                color: isDark
+                                    ? AppColors.slate200
+                                    : AppColors.slate700,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: LinearProgressIndicator(
+                                value:            barFrac,
+                                minHeight:        8,
+                                backgroundColor:  isDark
+                                    ? AppColors.slate700
+                                    : AppColors.slate200,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  isWinner ? gold : AppColors.slate400,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '${r.votes}',
+                            style: TextStyle(
+                              fontSize:   13,
+                              fontWeight: FontWeight.w600,
+                              color: isDark
+                                  ? AppColors.slate300
+                                  : AppColors.slate600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 // ── Loading skeleton ──────────────────────────────────────────────────────────
 
 class _LoadingSkeleton extends StatelessWidget {
@@ -1077,52 +1302,61 @@ int _diffSecClock(_Clock goal, int startMinOfDay) {
   return diffMin * 60 + goal.s;
 }
 
+/// Infere o minuto do início do jogo (minOfDay) a partir dos horários dos gols.
+///
+/// Estratégia:
+/// 1. Ancora no horário do gol mais cedo.
+/// 2. Candidatos: hora cheia e meia-hora dentro de uma janela de até 60 min
+///    antes do primeiro gol (máx 4 candidatos).
+/// 3. Escolhe o candidato **mais cedo** em que **todos** os gols cabem
+///    na faixa 0–3600 s — garante que gols do segundo tempo não "empurram"
+///    o início para o meio da partida.
+/// 4. Se nenhum candidato encaixa todos, escolhe o que encaixa mais gols.
 int? _inferStart(List<String?> times) {
   final clocks = times.map(_parseClock).whereType<_Clock>().toList();
   if (clocks.isEmpty) return null;
 
-  final hourSet = clocks.map((c) => c.h).toSet();
-  final candidateHours = <int>{};
-  for (final h in hourSet) {
-    candidateHours.addAll([(h + 23) % 24, h, (h + 1) % 24]);
-  }
+  // Gol mais cedo como âncora.
+  clocks.sort((a, b) => a.minOfDay.compareTo(b.minOfDay));
+  final earliest = clocks.first;
 
+  // Candidatos: hora cheia e meia-hora ≤ earliest e até 60 min antes.
   final candidates = <int>[];
-  for (final h in candidateHours) {
-    candidates.add(h * 60);
-    candidates.add(h * 60 + 30);
+  for (int offset = 0; offset <= 60; offset += 30) {
+    int cand = earliest.minOfDay - offset;
+    if (cand < 0) cand += 1440;      // wrap midnight
+    // Normalizar para hora cheia ou meia-hora mais próxima ≤ cand
+    final atHour = (cand ~/ 60) * 60;
+    final atHalf = atHour + 30;
+    if (atHour <= earliest.minOfDay) candidates.add(atHour);
+    if (atHalf <= earliest.minOfDay) candidates.add(atHalf);
   }
-  candidates.sort();
+  // Remove duplicatas e ordena crescente (mais cedo primeiro).
+  final sorted = candidates.toSet().toList()..sort();
 
-  final first = (clocks.toList()..sort((a, b) => a.minOfDay.compareTo(b.minOfDay))).first;
-
-  int?   bestStart;
-  int    bestCount  = 0;
-  int    bestMax    = 9999999;
-  int    bestFirst  = 9999999;
-
-  for (final start in candidates) {
-    int count = 0, maxDiff = 0;
-    for (final c in clocks) {
+  // Verifica quais candidatos encaixam TODOS os gols dentro de 0–3600 s.
+  for (final start in sorted) {
+    final allFit = clocks.every((c) {
       final d = _diffSecClock(c, start);
-      if (d >= 0 && d <= 3600) {
-        count++;
-        if (d > maxDiff) maxDiff = d;
-      }
-    }
-    final firstDiff = _diffSecClock(first, start);
-    if (bestStart == null ||
-        count > bestCount ||
-        (count == bestCount && maxDiff < bestMax) ||
-        (count == bestCount && maxDiff == bestMax && firstDiff < bestFirst)) {
-      bestStart = start;
-      bestCount = count;
-      bestMax   = maxDiff;
-      bestFirst = firstDiff;
-    }
+      return d >= 0 && d <= 3600;
+    });
+    if (allFit) return start;
   }
 
-  return (bestStart != null && bestCount > 0) ? bestStart : first.h * 60;
+  // Fallback: candidato que encaixa o maior número de gols.
+  int? bestStart;
+  int  bestCount = 0;
+  for (final start in sorted) {
+    final count = clocks.where((c) {
+      final d = _diffSecClock(c, start);
+      return d >= 0 && d <= 3600;
+    }).length;
+    if (count > bestCount) {
+      bestCount = count;
+      bestStart = start;
+    }
+  }
+  return bestStart ?? earliest.h * 60;
 }
 
 // ── GoalEvent ─────────────────────────────────────────────────────────────────
@@ -1188,6 +1422,7 @@ class _SimulationTimelineState extends State<_SimulationTimeline>
       vsync:    this,
       duration: const Duration(milliseconds: _durationMs),
     )..addListener(() => setState(() {}))
+     ..addStatusListener((_) => setState(() {}))
      ..forward();
   }
 
@@ -1486,13 +1721,19 @@ class _TimelineBar extends StatelessWidget {
     final totalGoals   = goals.length;
     final currentGoals = goals.where((g) => g.tSec <= simSec).length;
 
+    // Rail geometry constants
+    const double railH   = 5.0;    // rail thickness
+    const double ballSz  = 30.0;   // ball diameter
+    const double rowH    = ballSz + 16.0; // total row height (glow room)
+    const double railTop = (rowH - railH) / 2.0; // vertically centred rail
+    const double ballTop = (rowH - ballSz) / 2.0; // ball centred on rail
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Label row
+        // ── Label row: dot + name + animated score ─────────────────
         Row(
           children: [
-            // Colored dot
             Container(
               width: 11, height: 11,
               decoration: BoxDecoration(
@@ -1508,130 +1749,122 @@ class _TimelineBar extends StatelessWidget {
                 style: TextStyle(
                   fontSize:   12,
                   fontWeight: FontWeight.w600,
-                  color: isDark ? AppColors.slate400 : AppColors.slate600,
+                  color: isDark ? AppColors.slate300 : AppColors.slate600,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            RichText(
-              text: TextSpan(
-                children: [
-                  TextSpan(
-                    text: '$currentGoals',
-                    style: TextStyle(
-                      fontSize:   11,
-                      fontWeight: FontWeight.w700,
-                      color:      _safeLabel,
+            // Animated score: "current / total"
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              transitionBuilder: (child, anim) =>
+                  ScaleTransition(scale: anim, child: child),
+              child: RichText(
+                key: ValueKey(currentGoals),
+                text: TextSpan(
+                  children: [
+                    TextSpan(
+                      text: '$currentGoals',
+                      style: TextStyle(
+                        fontSize:   12,
+                        fontWeight: FontWeight.w700,
+                        color:      currentGoals > 0 ? _safeLabel
+                            : (isDark ? AppColors.slate600 : AppColors.slate300),
+                      ),
                     ),
-                  ),
-                  TextSpan(
-                    text: '/$totalGoals',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: isDark ? AppColors.slate600 : AppColors.slate300,
+                    TextSpan(
+                      text: ' / $totalGoals',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? AppColors.slate600 : AppColors.slate300,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
 
-        // Timeline track with LayoutBuilder to get actual pixel width
+        // ── Timeline track ─────────────────────────────────────────
         LayoutBuilder(
           builder: (context, constraints) {
             final trackW     = constraints.maxWidth;
             final progressPx = (progress * trackW).clamp(0.0, trackW);
 
             return SizedBox(
-              height: 52,
+              height: rowH,
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  // ── Background rail ─────────────────────────────
+                  // Background rail
                   Positioned(
-                    left: 0, right: 0, top: 22, height: 8,
+                    left: 0, right: 0,
+                    top: railTop, height: railH,
                     child: Container(
                       decoration: BoxDecoration(
-                        color:        isDark ? AppColors.slate800 : AppColors.slate100,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(
-                          color: isDark ? AppColors.slate700 : AppColors.slate200,
+                        color:        isDark ? AppColors.slate700 : AppColors.slate200,
+                        borderRadius: BorderRadius.circular(railH / 2),
+                      ),
+                    ),
+                  ),
+
+                  // Progress fill — full team color
+                  if (progressPx > 0)
+                    Positioned(
+                      left: 0, top: railTop,
+                      width: progressPx, height: railH,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: _isWhite
+                              ? AppColors.slate400
+                              : teamColor,
+                          borderRadius: BorderRadius.circular(railH / 2),
                         ),
                       ),
                     ),
-                  ),
 
-                  // ── Progress fill (team color, ~55% opacity) ────
-                  Positioned(
-                    left: 0, top: 22, width: progressPx, height: 8,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: (_isWhite ? AppColors.slate400 : teamColor)
-                            .withAlpha(140),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                  ),
-
-                  // ── Current-time cursor ──────────────────────────
-                  if (progressPx > 0 && progressPx < trackW)
-                    Positioned(
-                      left:   progressPx - 0.5,
-                      top:    18,
-                      height: 16,
-                      child: Container(
-                        width: 1,
-                        color: AppColors.slate400.withAlpha(160),
-                      ),
-                    ),
-
-                  // ── Tick marks (every 10 min = 7 ticks: 0,10,20,30,40,50,60)
-                  ...List.generate(7, (i) {
-                    final x = (i / 6.0) * trackW - 0.5;
+                  // Tick marks (5 inner ticks at 10, 20, 30, 40, 50 min)
+                  ...List.generate(5, (i) {
+                    final x = ((i + 1) / 6.0) * trackW - 0.5;
                     return Positioned(
                       left:   x,
-                      top:    18,
-                      height: 16,
+                      top:    railTop - 2,
+                      height: railH + 4,
                       child: Container(
                         width: 1,
-                        color: (isDark ? AppColors.slate700 : AppColors.slate200)
-                            .withAlpha(200),
+                        color: (isDark ? AppColors.slate600 : AppColors.slate300)
+                            .withAlpha(120),
                       ),
                     );
                   }),
 
-                  // ── Goal markers (evenly distributed, appear in chronological order)
-                  ...goals.asMap().entries.map((entry) {
-                    const ballSize  = 28.0;
-                    // Rail: top=22, height=8 → centre at y=26.
-                    // Ball top so its centre aligns with rail centre: 26 - 14 = 12.
-                    const ballTop   = 12.0;
-                    final idx       = entry.key;
-                    final g         = entry.value;
-                    final n         = goals.length;
-                    // Divide the track into n equal slots; center the ball in its slot.
-                    final slotW     = trackW / n;
-                    final left      = slotW * idx + (slotW - ballSize) / 2;
+                  // Goal balls — positioned by actual timestamp
+                  ...goals.map((g) {
+                    final leftPct   = g.tSec / (totalMinutes * 60.0);
+                    final cx        = (leftPct * trackW).clamp(ballSz / 2, trackW - ballSz / 2);
+                    final left      = cx - ballSz / 2;
                     final isVisible = g.tSec <= simSec;
 
                     return Positioned(
-                      left: left.clamp(0.0, trackW - ballSize),
+                      left: left,
                       top:  ballTop,
                       child: AnimatedOpacity(
-                        duration: const Duration(milliseconds: 300),
+                        duration: const Duration(milliseconds: 350),
                         opacity:  isVisible ? 1.0 : 0.0,
                         child: AnimatedScale(
-                          duration: const Duration(milliseconds: 300),
-                          scale:    isVisible ? 1.0 : 0.3,
+                          duration:  const Duration(milliseconds: 350),
+                          scale:     isVisible ? 1.0 : 0.2,
+                          alignment: Alignment.center,
                           child: Tooltip(
                             message: '${g.minute}\' • ${g.goalWithTeam.goal.scorerName ?? ""}',
                             child: _GoalBall(
                               teamColor:   teamColor,
                               borderColor: _safeBorder,
                               isWhite:     _isWhite,
+                              size:        ballSz,
                             ),
                           ),
                         ),
@@ -1651,35 +1884,45 @@ class _TimelineBar extends StatelessWidget {
 // ── Goal ball ─────────────────────────────────────────────────────────────────
 
 class _GoalBall extends StatelessWidget {
-  final Color teamColor;
-  final Color borderColor;
-  final bool  isWhite;
+  final Color  teamColor;
+  final Color  borderColor;
+  final bool   isWhite;
+  final double size;
 
   const _GoalBall({
     required this.teamColor,
     required this.borderColor,
     required this.isWhite,
+    this.size = 30,
   });
 
   @override
   Widget build(BuildContext context) {
+    final glowColor = isWhite ? AppColors.slate400 : teamColor;
     return Container(
-      width:  28,
-      height: 28,
+      width:  size,
+      height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: Colors.white,
         border: Border.all(color: borderColor, width: 2),
         boxShadow: [
+          // Inner soft glow
           BoxShadow(
-            color:      teamColor.withAlpha(isWhite ? 40 : 80),
-            blurRadius: 6,
-            spreadRadius: 1,
+            color:        glowColor.withAlpha(isWhite ? 50 : 100),
+            blurRadius:   6,
+            spreadRadius: 0,
+          ),
+          // Outer radial glow — matches website cyan halo
+          BoxShadow(
+            color:        glowColor.withAlpha(isWhite ? 30 : 70),
+            blurRadius:   12,
+            spreadRadius: 3,
           ),
         ],
       ),
-      child: const Center(
-        child: Text('⚽', style: TextStyle(fontSize: 14, height: 1)),
+      child: Center(
+        child: Text('⚽', style: TextStyle(fontSize: size * 0.47, height: 1)),
       ),
     );
   }

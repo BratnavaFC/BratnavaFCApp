@@ -61,7 +61,19 @@ class AccountStore extends StateNotifier<AccountState> {
       final list = (json.decode(raw) as List)
           .map((e) => Account.fromJson(e as Map<String, dynamic>))
           .toList();
-      state = AccountState(accounts: list, activeAccountId: activeId);
+
+      // Remove sessões com "manter logado" desmarcado — sempre desloga ao reiniciar.
+      // Remove também sessões mantidas mas com token já expirado (sem refresh token válido).
+      final activeList = list.where((a) {
+        if (!a.keepLoggedIn) return false;
+        return true;
+      }).toList();
+
+      final validActiveId = activeList.any((a) => a.userId == activeId)
+          ? activeId
+          : (activeList.isNotEmpty ? activeList.first.userId : null);
+
+      state = AccountState(accounts: activeList, activeAccountId: validActiveId);
     } catch (_) {}
   }
 

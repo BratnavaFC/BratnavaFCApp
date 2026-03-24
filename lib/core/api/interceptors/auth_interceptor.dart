@@ -15,6 +15,9 @@ class AuthInterceptor extends Interceptor {
   /// Dio dedicado para refresh (evita loop no interceptor principal).
   late final Dio _refreshDio;
 
+  /// Serialises concurrent refresh attempts — all callers await the same Future.
+  Future<String?>? _pendingRefresh;
+
   AuthInterceptor({
     required this.getAccessToken,
     required this.getRefreshToken,
@@ -37,7 +40,7 @@ class AuthInterceptor extends Interceptor {
   ) async {
     var accessToken = getAccessToken();
 
-    if (accessToken != null && JwtHelper.isExpiring(accessToken)) {
+    if (accessToken != null && JwtHelper.isExpiring(accessToken, bufferSeconds: 300)) {
       accessToken = await _tryRefresh() ?? accessToken;
     }
 
@@ -69,7 +72,18 @@ class AuthInterceptor extends Interceptor {
     handler.next(err);
   }
 
-  Future<String?> _tryRefresh() async {
+  /// Public entry-point used by proactive refresh outside the interceptor.
+  /// Shares the same mutex as in-flight interceptor refresh calls.
+  Future<String?> tryRefresh() => _tryRefresh();
+
+  /// Serialised entry-point: concurrent callers share one in-flight Future.
+  Future<String?> _tryRefresh() {
+    return _pendingRefresh ??= _doRefresh().whenComplete(() {
+      _pendingRefresh = null;
+    });
+  }
+
+  Future<String?> _doRefresh() async {
     final refreshToken = getRefreshToken();
     if (refreshToken == null) return null;
 
@@ -78,9 +92,12 @@ class AuthInterceptor extends Interceptor {
         '/api/Authentication/refresh-token',
         data: {'refreshToken': refreshToken},
       );
-      final data = res.data as Map<String, dynamic>;
-      final access  = (data['token']        ?? data['accessToken'] ?? data['jwt'])    as String?;
-      final refresh = (data['refreshToken'] ?? data['refresh'])                        as String?;
+      // The API wraps tokens in { "data": { "token": "...", "refreshToken": "..." } }.
+      final envelope = res.data as Map<String, dynamic>;
+      final data     = (envelope['data'] as Map<String, dynamic>?) ?? envelope;
+
+      final access  = (data['token']        ?? data['accessToken'] ?? data['jwt']) as String?;
+      final refresh = (data['refreshToken'] ?? data['refresh'])                     as String?;
 
       if (access != null && refresh != null) {
         await onTokensRefreshed(access, refresh);

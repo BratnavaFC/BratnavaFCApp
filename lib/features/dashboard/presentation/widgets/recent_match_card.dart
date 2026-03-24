@@ -25,7 +25,7 @@ class RecentMatchCard extends StatelessWidget {
 
     final myHex  = match.myTeamColor?.hexValue;
     final myName = match.myTeamColor?.name;
-    final hasScore = true; // sempre mostra
+    const hasScore = true; // sempre mostra
 
     final (outcomeLabel, outcomeFg, outcomeBg, outcomeBorder) = switch (match.outcome) {
       MatchOutcome.win  => ('Vitória', AppColors.emerald700, AppColors.emerald50,  const Color(0xFFA7F3D0)),
@@ -59,7 +59,7 @@ class RecentMatchCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
-                  color: isDark ? AppColors.slate800.withOpacity(.5) : AppColors.slate50,
+                  color: isDark ? AppColors.slate800.withValues(alpha: .5) : AppColors.slate50,
                   border: Border(
                     right: BorderSide(
                       color: isDark ? AppColors.slate800 : AppColors.slate100,
@@ -219,8 +219,8 @@ class RecentMatchCard extends StatelessWidget {
                                   fontWeight: FontWeight.w800,
                                 ),
                               ),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 3),
+                              const Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 3),
                                 child: Text(
                                   '×',
                                   style: TextStyle(
@@ -281,7 +281,7 @@ class _ColorDot extends StatelessWidget {
         shape:  BoxShape.circle,
         color:  color,
         border: Border.all(
-          color: isWhite ? AppColors.slate300 : Colors.white.withOpacity(.3),
+          color: isWhite ? AppColors.slate300 : Colors.white.withValues(alpha: .3),
           width: 1,
         ),
       ),

@@ -13,6 +13,7 @@ import '../../features/players/presentation/pages/players_page.dart';
 import '../../features/group_settings/presentation/pages/group_settings_page.dart';
 import '../../features/birthdays/presentation/pages/birthday_page.dart';
 import '../../features/shell/presentation/pages/shell_page.dart';
+import '../../features/visual_stats/presentation/pages/visual_stats_page.dart';
 
 // ── Placeholder para rotas ainda não implementadas ────────────────────────────
 class _PlaceholderPage extends StatelessWidget {
@@ -104,7 +105,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path:    '/app/visual-stats',
-            builder: (_, __) => const _PlaceholderPage('Visual Stats'),
+            builder: (_, __) => const VisualStatsPage(),
           ),
           GoRoute(
             path:    '/app/payments',

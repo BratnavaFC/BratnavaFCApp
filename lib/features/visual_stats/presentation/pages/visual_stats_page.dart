@@ -1,4 +1,4 @@
-import 'dart:math' show max, min;
+import 'dart:math' show min;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -130,8 +130,6 @@ class _VisualStatsPageState extends ConsumerState<VisualStatsPage> {
   bool   _showRankings = true; // false = players tab
   String _search       = '';
   _SortKey _sortKey    = _SortKey.winRate;
-  String?  _selectedId;
-  int    _minTogether  = 1;
 
   final _searchCtrl = TextEditingController();
 
@@ -185,9 +183,6 @@ class _VisualStatsPageState extends ConsumerState<VisualStatsPage> {
               error:   (e, _) => SliverToBoxAdapter(child: _ErrorState(message: e.toString())),
               data:    (report) {
                 final sorted = _sorted(report.players);
-                final selected = report.players
-                    .where((p) => p.playerId == _selectedId)
-                    .firstOrNull;
                 return SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
@@ -201,25 +196,17 @@ class _VisualStatsPageState extends ConsumerState<VisualStatsPage> {
                             icons:     icons,
                             onSort:    (k) => setState(() => _sortKey = k),
                             onSearch:  (v) => setState(() => _search = v),
-                            onPlayerTap: (id) => setState(() {
-                              _selectedId   = id;
-                              _showRankings = false;
-                            }),
+                            onPlayerTap: (id) => setState(() => _showRankings = false),
                           )
                         : _PlayersContent(
-                            report:      report,
-                            sorted:      sorted,
-                            sortKey:     _sortKey,
-                            search:      _search,
-                            searchCtrl:  _searchCtrl,
-                            selectedId:  _selectedId,
-                            selected:    selected,
-                            minTogether: _minTogether,
-                            icons:       icons,
-                            onSort:      (k) => setState(() => _sortKey = k),
-                            onSearch:    (v) => setState(() => _search = v),
-                            onSelect:    (id) => setState(() => _selectedId = id),
-                            onMinToggle: (v) => setState(() => _minTogether = v),
+                            report:     report,
+                            sorted:     sorted,
+                            sortKey:    _sortKey,
+                            search:     _search,
+                            searchCtrl: _searchCtrl,
+                            icons:      icons,
+                            onSort:     (k) => setState(() => _sortKey = k),
+                            onSearch:   (v) => setState(() => _search = v),
                           ),
                   ),
                 );
@@ -516,8 +503,7 @@ class _RankingTable extends StatelessWidget {
           ...sorted.asMap().entries.map((e) {
             final idx = e.key;
             final p   = e.value;
-            final wr  = _normalizeWR(p.winRate);
-            final col = _wrColor(wr);
+            final wr       = _normalizeWR(p.winRate);
             final dimColor = isDark ? AppColors.slate700 : AppColors.slate100;
             return GestureDetector(
               onTap: () => onTap(p.playerId),
@@ -664,104 +650,134 @@ class _PlayersContent extends StatelessWidget {
   final _SortKey                     sortKey;
   final String                       search;
   final TextEditingController        searchCtrl;
-  final String?                      selectedId;
-  final PlayerVisualStatsItem?       selected;
-  final int                          minTogether;
   final _GroupIcons                  icons;
   final ValueChanged<_SortKey>       onSort;
   final ValueChanged<String>         onSearch;
-  final ValueChanged<String>         onSelect;
-  final ValueChanged<int>            onMinToggle;
 
   const _PlayersContent({
     required this.report, required this.sorted, required this.sortKey,
-    required this.search, required this.searchCtrl, required this.selectedId,
-    required this.selected, required this.minTogether, required this.icons,
-    required this.onSort, required this.onSearch, required this.onSelect,
-    required this.onMinToggle,
+    required this.search, required this.searchCtrl, required this.icons,
+    required this.onSort, required this.onSearch,
   });
+
+  void _showDetail(BuildContext context, PlayerVisualStatsItem player) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet(
+      context:            context,
+      isScrollControlled: true,
+      backgroundColor:    Colors.transparent,
+      builder: (_) => _PlayerDetailSheet(
+        player: player,
+        icons:  icons,
+        isDark: isDark,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return _card(isDark, child: Column(
       children: [
-        // Player list
-        _card(isDark, child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _searchField(isDark, searchCtrl, onSearch),
+              const SizedBox(height: 8),
+              _sortChips(isDark, sortKey, icons, onSort),
+            ],
+          ),
+        ),
+        Divider(height: 1, color: isDark ? AppColors.slate700 : AppColors.slate100),
+        if (sorted.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            child: Center(child: Text('Nenhum jogador encontrado.',
+                style: TextStyle(fontSize: 13,
+                    color: isDark ? AppColors.slate500 : AppColors.slate400))),
+          )
+        else
+          ...sorted.map((p) => _PlayerListItem(
+            player: p,
+            icons:  icons,
+            isDark: isDark,
+            onTap:  () => _showDetail(context, p),
+          )),
+      ],
+    ));
+  }
+}
+
+// ── Player detail bottom sheet ────────────────────────────────────────────────
+
+class _PlayerDetailSheet extends StatefulWidget {
+  final PlayerVisualStatsItem player;
+  final _GroupIcons           icons;
+  final bool                  isDark;
+
+  const _PlayerDetailSheet({
+    required this.player, required this.icons, required this.isDark,
+  });
+
+  @override
+  State<_PlayerDetailSheet> createState() => _PlayerDetailSheetState();
+}
+
+class _PlayerDetailSheetState extends State<_PlayerDetailSheet> {
+  int _minTogether = 1;
+
+  @override
+  Widget build(BuildContext context) {
+    final maxH = MediaQuery.of(context).size.height * 0.88;
+    return Container(
+      constraints: BoxConstraints(maxHeight: maxH),
+      decoration: BoxDecoration(
+        color:        widget.isDark ? AppColors.slate900 : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Drag handle
+          Padding(
+            padding: const EdgeInsets.only(top: 10, bottom: 6),
+            child: Container(
+              width: 36, height: 4,
+              decoration: BoxDecoration(
+                color:        widget.isDark ? AppColors.slate700 : AppColors.slate300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          // Scrollable content
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _searchField(isDark, searchCtrl, onSearch),
-                  const SizedBox(height: 8),
-                  _sortChips(isDark, sortKey, icons, onSort),
+                  _PlayerDetailCard(
+                    player: widget.player,
+                    icons:  widget.icons,
+                    isDark: widget.isDark,
+                  ),
+                  const SizedBox(height: 14),
+                  _SynergyCard(
+                    player:      widget.player,
+                    minTogether: _minTogether,
+                    icons:       widget.icons,
+                    isDark:      widget.isDark,
+                    onMinChange: (v) => setState(() => _minTogether = v),
+                  ),
                 ],
               ),
             ),
-            Divider(height: 1, color: isDark ? AppColors.slate700 : AppColors.slate100),
-            if (sorted.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 20),
-                child: Center(child: Text('Nenhum jogador encontrado.',
-                    style: TextStyle(fontSize: 13,
-                        color: isDark ? AppColors.slate500 : AppColors.slate400))),
-              )
-            else
-              ...sorted.map((p) => _PlayerListItem(
-                player:     p,
-                icons:      icons,
-                isSelected: p.playerId == selectedId,
-                isDark:     isDark,
-                onTap:      () => onSelect(p.playerId),
-              )),
-          ],
-        )),
-
-        const SizedBox(height: 16),
-
-        // Player detail
-        if (selected == null)
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 40),
-            decoration: BoxDecoration(
-              color:        isDark ? AppColors.slate800 : Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                  color:      isDark ? AppColors.slate700 : AppColors.slate200,
-                  style:      BorderStyle.solid),
-            ),
-            child: Center(child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.group_outlined, size: 32,
-                    color: isDark ? AppColors.slate600 : AppColors.slate300),
-                const SizedBox(height: 8),
-                Text('Selecione um jogador',
-                    style: TextStyle(fontSize: 13,
-                        color: isDark ? AppColors.slate500 : AppColors.slate400)),
-              ],
-            )),
-          )
-        else ...[
-          _PlayerDetailCard(
-            player: selected!,
-            icons:  icons,
-            isDark: isDark,
-          ),
-          const SizedBox(height: 16),
-          _SynergyCard(
-            player:      selected!,
-            minTogether: minTogether,
-            icons:       icons,
-            isDark:      isDark,
-            onMinChange: onMinToggle,
           ),
         ],
-      ],
+      ),
     );
   }
 }
@@ -771,27 +787,22 @@ class _PlayersContent extends StatelessWidget {
 class _PlayerListItem extends StatelessWidget {
   final PlayerVisualStatsItem player;
   final _GroupIcons           icons;
-  final bool                  isSelected;
   final bool                  isDark;
   final VoidCallback          onTap;
 
   const _PlayerListItem({
-    required this.player, required this.icons, required this.isSelected,
+    required this.player, required this.icons,
     required this.isDark, required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final wr       = _normalizeWR(player.winRate);
-    final wrCol    = _wrColor(wr);
-    final selBg    = isDark ? Colors.white : AppColors.slate900;
-    final selFg    = isDark ? AppColors.slate900 : Colors.white;
-    final normBg   = Colors.transparent;
+    final wr    = _normalizeWR(player.winRate);
+    final wrCol = _wrColor(wr);
 
-    return GestureDetector(
+    return InkWell(
       onTap: onTap,
-      child: Container(
-        color: isSelected ? selBg : normBg,
+      child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         child: Row(
           children: [
@@ -799,17 +810,14 @@ class _PlayerListItem extends StatelessWidget {
             Container(
               width: 34, height: 34,
               decoration: BoxDecoration(
-                color:  isSelected
-                    ? Colors.white.withAlpha(30)
-                    : (isDark ? AppColors.slate800 : AppColors.slate100),
+                color: isDark ? AppColors.slate800 : AppColors.slate100,
                 shape: BoxShape.circle,
               ),
               child: Center(child: Text(
                 player.name.isNotEmpty ? player.name[0].toUpperCase() : '?',
                 style: TextStyle(
                   fontSize: 13, fontWeight: FontWeight.w700,
-                  color: isSelected ? selFg
-                      : (isDark ? AppColors.slate400 : AppColors.slate600),
+                  color: isDark ? AppColors.slate400 : AppColors.slate600,
                 ),
               )),
             ),
@@ -821,14 +829,13 @@ class _PlayerListItem extends StatelessWidget {
                 Row(children: [
                   if (player.isGoalkeeper) ...[
                     _renderIcon(icons.goalkeeper, size: 11,
-                        color: isSelected ? selFg.withAlpha(180)
-                            : (isDark ? AppColors.slate400 : AppColors.slate500)),
+                        color: isDark ? AppColors.slate400 : AppColors.slate500),
                     const SizedBox(width: 4),
                   ],
                   Flexible(child: Text(player.name,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
-                      color: isSelected ? selFg : (isDark ? Colors.white : AppColors.slate900)),
+                      color: isDark ? Colors.white : AppColors.slate900),
                   )),
                 ]),
                 Text(
@@ -839,13 +846,18 @@ class _PlayerListItem extends StatelessWidget {
                 ),
               ],
             )),
-            // WR %
-            Text(_pct(wr),
-              style: TextStyle(
-                fontSize: 12, fontWeight: FontWeight.w700,
-                color: isSelected ? Colors.white : wrCol,
-                fontFeatures: const [FontFeature.tabularFigures()],
-              )),
+            // WR % + chevron
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              Text(_pct(wr),
+                style: TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w700,
+                  color: wrCol,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                )),
+              const SizedBox(width: 4),
+              Icon(Icons.chevron_right_rounded, size: 16,
+                  color: isDark ? AppColors.slate600 : AppColors.slate300),
+            ]),
           ],
         ),
       ),

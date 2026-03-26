@@ -238,9 +238,7 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
     );
     _dayOfWeek    = s.defaultDayOfWeek;
     // API stores "HH:mm:ss" — display only "HH:mm"
-    _kickoffTime  = s.defaultKickoffTime != null
-        ? s.defaultKickoffTime!.substring(0, 5.clamp(0, s.defaultKickoffTime!.length))
-        : null;
+    _kickoffTime  = s.defaultKickoffTime?.substring(0, 5.clamp(0, s.defaultKickoffTime!.length));
     _paymentMode  = s.paymentMode;
     _isPersisted  = s.isPersisted;
     _icons = {
@@ -669,16 +667,16 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
               ),
             )
           else if (!_isPersisted)
-            Expanded(
+            const Expanded(
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline_rounded,
+                  Icon(Icons.info_outline_rounded,
                       size: 13, color: AppColors.amber500),
-                  const SizedBox(width: 4),
+                  SizedBox(width: 4),
                   Flexible(
                     child: Text(
                       'Usando valores padrão — salve para persistir.',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
                         color: AppColors.amber500,
                       ),
@@ -844,7 +842,7 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
       );
     }
     if (detail == null) {
-      return Text(
+      return const Text(
         'Não foi possível carregar membros.',
         style: TextStyle(color: AppColors.rose500, fontSize: 13),
       );
@@ -1995,13 +1993,13 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: AppColors.emerald500.withAlpha(80)),
                   ),
-                  child: Row(
+                  child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.check_rounded,
+                      Icon(Icons.check_rounded,
                           size: 12, color: AppColors.emerald500),
-                      const SizedBox(width: 3),
-                      const Text('Adicionado',
+                      SizedBox(width: 3),
+                      Text('Adicionado',
                           style: TextStyle(
                             fontSize:  11,
                             color:     AppColors.emerald500,

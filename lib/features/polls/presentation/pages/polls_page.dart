@@ -63,12 +63,14 @@ class _PollsPageState extends ConsumerState<PollsPage> {
             groupId: _groupId!,
             isAdmin: _isAdmin,
             onUpdated: (_) => _refresh(),
+            onDeleted: () { Navigator.of(context).pop(); _refresh(); },
           )
         : PollDetailSheet(
             poll: detail,
             groupId: _groupId!,
             isAdmin: _isAdmin,
             onUpdated: (_) => _refresh(),
+            onDeleted: () { Navigator.of(context).pop(); _refresh(); },
           );
 
     await showModalBottomSheet(

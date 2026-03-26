@@ -22,9 +22,19 @@ class AppColors {
   static const emerald500 = Color(0xFF10B981);
   static const emerald700 = Color(0xFF047857);
 
+  // Green – pagamento / sucesso
+  static const green50  = Color(0xFFF0FDF4);
+  static const green100 = Color(0xFFDCFCE7);
+  static const green200 = Color(0xFFBBF7D0);
+  static const green400 = Color(0xFF4ADE80);
+  static const green500 = Color(0xFF22C55E);
+  static const green600 = Color(0xFF16A34A);
+  static const green700 = Color(0xFF15803D);
+
   // Rose – perigo
   static const rose50  = Color(0xFFFFF1F2);
   static const rose200 = Color(0xFFFFCDD2);
+  static const rose400 = Color(0xFFFB7185);
   static const rose500 = Color(0xFFF43F5E);
   static const rose600 = Color(0xFFE11D48);
 

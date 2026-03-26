@@ -1,0 +1,184 @@
+// ── Mensalidades ──────────────────────────────────────────────────────────────
+
+class MonthlyCell {
+  final int     month;
+  final int     status;         // 0 = pendente, 1 = pago
+  final double  amount;
+  final double  discount;
+  final String? discountReason;
+  final String? paidAt;
+  final bool    hasProof;
+  final String? proofFileName;
+
+  const MonthlyCell({
+    required this.month,
+    required this.status,
+    required this.amount,
+    required this.discount,
+    this.discountReason,
+    this.paidAt,
+    required this.hasProof,
+    this.proofFileName,
+  });
+
+  bool get isPaid => status == 1;
+
+  factory MonthlyCell.fromJson(Map<String, dynamic> j) => MonthlyCell(
+    month:          j['month']          as int,
+    status:         j['status']         as int,
+    amount:         (j['amount']        as num).toDouble(),
+    discount:       (j['discount']      as num? ?? 0).toDouble(),
+    discountReason: j['discountReason'] as String?,
+    paidAt:         j['paidAt']         as String?,
+    hasProof:       j['hasProof']       as bool? ?? false,
+    proofFileName:  j['proofFileName']  as String?,
+  );
+}
+
+class PlayerRow {
+  final String         playerId;
+  final String         playerName;
+  final List<MonthlyCell> months;
+
+  const PlayerRow({
+    required this.playerId,
+    required this.playerName,
+    required this.months,
+  });
+
+  factory PlayerRow.fromJson(Map<String, dynamic> j) => PlayerRow(
+    playerId:   j['playerId']   as String,
+    playerName: j['playerName'] as String,
+    months: (j['months'] as List? ?? [])
+        .map((e) => MonthlyCell.fromJson(e as Map<String, dynamic>))
+        .toList(),
+  );
+}
+
+class MonthlyGrid {
+  final int            year;
+  final double?        monthlyFee;
+  final List<PlayerRow> players;
+
+  const MonthlyGrid({
+    required this.year,
+    this.monthlyFee,
+    required this.players,
+  });
+
+  factory MonthlyGrid.fromJson(Map<String, dynamic> j) => MonthlyGrid(
+    year:       j['year']       as int,
+    monthlyFee: (j['monthlyFee'] as num?)?.toDouble(),
+    players:    (j['players'] as List? ?? [])
+        .map((e) => PlayerRow.fromJson(e as Map<String, dynamic>))
+        .toList(),
+  );
+}
+
+// ── Cobranças extras ──────────────────────────────────────────────────────────
+
+class ExtraChargePayment {
+  final String  playerId;
+  final String  playerName;
+  final double  amount;
+  final double  discount;
+  final double  finalAmount;
+  final String? discountReason;
+  final int     status;         // 0 = pendente, 1 = pago
+  final String? paidAt;
+  final bool    hasProof;
+  final String? proofFileName;
+
+  const ExtraChargePayment({
+    required this.playerId,
+    required this.playerName,
+    required this.amount,
+    required this.discount,
+    required this.finalAmount,
+    this.discountReason,
+    required this.status,
+    this.paidAt,
+    required this.hasProof,
+    this.proofFileName,
+  });
+
+  bool get isPaid => status == 1;
+
+  factory ExtraChargePayment.fromJson(Map<String, dynamic> j) =>
+      ExtraChargePayment(
+        playerId:       j['playerId']       as String,
+        playerName:     j['playerName']     as String,
+        amount:         (j['amount']        as num).toDouble(),
+        discount:       (j['discount']      as num? ?? 0).toDouble(),
+        finalAmount:    (j['finalAmount']   as num).toDouble(),
+        discountReason: j['discountReason'] as String?,
+        status:         j['status']         as int,
+        paidAt:         j['paidAt']         as String?,
+        hasProof:       j['hasProof']       as bool? ?? false,
+        proofFileName:  j['proofFileName']  as String?,
+      );
+}
+
+class ExtraCharge {
+  final String                    id;
+  final String                    name;
+  final String?                   description;
+  final double                    amount;
+  final String?                   dueDate;
+  final String                    createdAt;
+  final bool                      isCancelled;
+  final List<ExtraChargePayment>  payments;
+
+  const ExtraCharge({
+    required this.id,
+    required this.name,
+    this.description,
+    required this.amount,
+    this.dueDate,
+    required this.createdAt,
+    required this.isCancelled,
+    required this.payments,
+  });
+
+  bool get isFinalized =>
+      !isCancelled && payments.isNotEmpty && payments.every((p) => p.isPaid);
+
+  int get year  => DateTime.parse(createdAt).year;
+  int get month => DateTime.parse(createdAt).month;
+
+  factory ExtraCharge.fromJson(Map<String, dynamic> j) => ExtraCharge(
+    id:          j['id']          as String,
+    name:        j['name']        as String,
+    description: j['description'] as String?,
+    amount:      (j['amount']     as num).toDouble(),
+    dueDate:     j['dueDate']     as String?,
+    createdAt:   j['createdAt']   as String,
+    isCancelled: j['isCancelled'] as bool? ?? false,
+    payments: (j['payments'] as List? ?? [])
+        .map((e) => ExtraChargePayment.fromJson(e as Map<String, dynamic>))
+        .toList(),
+  );
+}
+
+// ── Resumo financeiro (dashboard) ─────────────────────────────────────────────
+
+class PaymentSummary {
+  final int    pendingMonthlyCount;
+  final int    pendingExtraCount;
+  final double totalPendingAmount;
+  final int    paymentMode;   // 0=Monthly, 1=PerGame
+
+  const PaymentSummary({
+    required this.pendingMonthlyCount,
+    required this.pendingExtraCount,
+    required this.totalPendingAmount,
+    required this.paymentMode,
+  });
+
+  factory PaymentSummary.fromJson(Map<String, dynamic> j) => PaymentSummary(
+    pendingMonthlyCount: j['pendingMonthlyCount'] as int? ?? 0,
+    pendingExtraCount:   j['pendingExtraCount']   as int? ?? 0,
+    totalPendingAmount:  (j['totalPendingAmount'] as num? ?? 0).toDouble(),
+    paymentMode:         j['paymentMode']         as int? ?? 0,
+  );
+}

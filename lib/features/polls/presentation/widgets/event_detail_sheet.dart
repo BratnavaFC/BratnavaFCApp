@@ -11,6 +11,7 @@ class EventDetailSheet extends ConsumerStatefulWidget {
   final String       groupId;
   final bool         isAdmin;
   final ValueChanged<PollDetail> onUpdated;
+  final VoidCallback? onDeleted;
 
   const EventDetailSheet({
     super.key,
@@ -18,6 +19,7 @@ class EventDetailSheet extends ConsumerStatefulWidget {
     required this.groupId,
     required this.isAdmin,
     required this.onUpdated,
+    this.onDeleted,
   });
 
   @override
@@ -142,13 +144,13 @@ class _EventDetailSheetState extends ConsumerState<EventDetailSheet> {
   Future<void> _deletePoll() async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Excluir evento'),
         content: Text('Deseja excluir "${_poll.title}"?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancelar')),
           TextButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.pop(dialogContext, true),
             child: const Text('Excluir', style: TextStyle(color: Colors.red)),
           ),
         ],
@@ -158,7 +160,7 @@ class _EventDetailSheetState extends ConsumerState<EventDetailSheet> {
     setState(() => _saving = true);
     try {
       await _ds.deletePoll(widget.groupId, _poll.id);
-      if (mounted) Navigator.of(context).pop();
+      widget.onDeleted?.call();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

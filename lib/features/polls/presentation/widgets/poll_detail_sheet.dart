@@ -14,6 +14,7 @@ class PollDetailSheet extends ConsumerStatefulWidget {
   final String       groupId;
   final bool         isAdmin;
   final ValueChanged<PollDetail> onUpdated;
+  final VoidCallback? onDeleted;
 
   const PollDetailSheet({
     super.key,
@@ -21,6 +22,7 @@ class PollDetailSheet extends ConsumerStatefulWidget {
     required this.groupId,
     required this.isAdmin,
     required this.onUpdated,
+    this.onDeleted,
   });
 
   @override
@@ -207,12 +209,12 @@ class _PollDetailSheetState extends ConsumerState<PollDetailSheet>
   Future<void> _deletePoll() async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Excluir votação'),
         content: Text('Deseja excluir "${_poll.title}"?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-          TextButton(onPressed: () => Navigator.pop(context, true),
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancelar')),
+          TextButton(onPressed: () => Navigator.pop(dialogContext, true),
             child: const Text('Excluir', style: TextStyle(color: Colors.red))),
         ],
       ),
@@ -221,7 +223,7 @@ class _PollDetailSheetState extends ConsumerState<PollDetailSheet>
     setState(() => _saving = true);
     try {
       await _ds.deletePoll(widget.groupId, _poll.id);
-      if (mounted) Navigator.of(context).pop();
+      widget.onDeleted?.call();
     } catch (e) {
       if (mounted) { _showError('Erro: $e'); setState(() => _saving = false); }
     }

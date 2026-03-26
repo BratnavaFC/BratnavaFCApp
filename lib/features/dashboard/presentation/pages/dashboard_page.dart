@@ -2,11 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../auth/presentation/providers/account_store.dart';
 import '../providers/dashboard_provider.dart';
 import '../widgets/current_match_card.dart';
 import '../widgets/recent_match_card.dart';
+import '../../../payments/presentation/providers/payments_provider.dart';
 
 class DashboardPage extends ConsumerStatefulWidget {
   const DashboardPage({super.key});
@@ -130,9 +132,112 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                   : null,
               child: _buildRecentContent(context, isDark, activePlayer, recentAsync),
             ),
+            const SizedBox(height: 16),
+
+            // ── Situação financeira ─────────────────────────────────────────
+            _SectionCard(
+              isDark: isDark,
+              iconBg: const Color(0xFF16A34A).withValues(alpha: .1),
+              iconColor: AppColors.green600,
+              iconData: Icons.payments_outlined,
+              title: 'Situação financeira',
+              child: _buildPaymentSummaryContent(context, isDark, groupId),
+            ),
           ],
         ),
       ),
+    );
+  }
+
+  // ── Situação financeira — conteúdo ─────────────────────────────────────────
+  Widget _buildPaymentSummaryContent(
+      BuildContext context, bool isDark, String groupId) {
+    if (groupId.isEmpty) {
+      return _CenteredMsg(
+          msg: 'Selecione uma patota para ver sua situação financeira.',
+          isDark: isDark);
+    }
+    final summaryAsync = ref.watch(myPaymentSummaryProvider(groupId));
+    return summaryAsync.when(
+      loading: () => const _Skeleton(height: 60),
+      error:   (_, __) => _CenteredMsg(
+          msg: 'Não foi possível carregar situação financeira.', isDark: isDark),
+      data: (summary) {
+        if (summary == null) {
+          return _CenteredMsg(
+              msg: 'Nenhuma informação de pagamento disponível.', isDark: isDark);
+        }
+        final hasPending = summary.pendingMonthlyCount > 0 ||
+            summary.pendingExtraCount > 0;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (!hasPending)
+              Row(children: [
+                Icon(Icons.check_circle_rounded,
+                    size: 18, color: AppColors.green600),
+                const SizedBox(width: 8),
+                Text('Tudo em dia! 🎉',
+                    style: TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.w600,
+                      color: AppColors.green600,
+                    )),
+              ])
+            else ...[
+              if (summary.pendingMonthlyCount > 0)
+                _PaymentSummaryRow(
+                  icon:    Icons.calendar_month_outlined,
+                  label:   '${summary.pendingMonthlyCount} mensalidade${summary.pendingMonthlyCount != 1 ? 's' : ''} pendente${summary.pendingMonthlyCount != 1 ? 's' : ''}',
+                  isDark:  isDark,
+                  isAlert: true,
+                ),
+              if (summary.pendingExtraCount > 0)
+                _PaymentSummaryRow(
+                  icon:    Icons.receipt_outlined,
+                  label:   '${summary.pendingExtraCount} cobrança${summary.pendingExtraCount != 1 ? 's' : ''} extra pendente${summary.pendingExtraCount != 1 ? 's' : ''}',
+                  isDark:  isDark,
+                  isAlert: true,
+                ),
+              if (summary.totalPendingAmount > 0) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color:        AppColors.rose50,
+                    borderRadius: BorderRadius.circular(8),
+                    border:       Border.all(color: AppColors.rose200),
+                  ),
+                  child: Row(children: [
+                    const Icon(Icons.warning_amber_rounded,
+                        size: 14, color: AppColors.rose500),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Total pendente: R\$ ${summary.totalPendingAmount.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w600,
+                        color: AppColors.rose500,
+                      ),
+                    ),
+                  ]),
+                ),
+              ],
+            ],
+            const SizedBox(height: 12),
+            GestureDetector(
+              onTap: () => context.go('/app/payments'),
+              child: Text(
+                'Ver pagamentos →',
+                style: TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w600,
+                  color: isDark ? AppColors.slate400 : AppColors.slate500,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -527,4 +632,37 @@ class _CenteredMsg extends StatelessWidget {
       ),
     );
   }
+}
+
+// ── Payment summary row ───────────────────────────────────────────────────────
+
+class _PaymentSummaryRow extends StatelessWidget {
+  final IconData icon;
+  final String   label;
+  final bool     isDark;
+  final bool     isAlert;
+
+  const _PaymentSummaryRow({
+    required this.icon,
+    required this.label,
+    required this.isDark,
+    this.isAlert = false,
+  });
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Row(children: [
+      Icon(icon, size: 15,
+          color: isAlert ? AppColors.rose500 : AppColors.green600),
+      const SizedBox(width: 8),
+      Text(label,
+          style: TextStyle(
+            fontSize: 13,
+            color: isAlert
+                ? AppColors.rose500
+                : (isDark ? AppColors.slate300 : AppColors.slate700),
+          )),
+    ]),
+  );
 }

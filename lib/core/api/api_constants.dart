@@ -39,7 +39,31 @@ class ApiConstants {
   static String matchHistory(String groupId) =>
       '/api/Matches/group/$groupId/history';
 
-  // Payments
+  // Payments – mensalidades
+  static String monthlyGrid(String groupId, int year) =>
+      '/api/groups/$groupId/payments/monthly/$year';
+  static String upsertMonthly(String groupId) =>
+      '/api/groups/$groupId/payments/monthly';
+  static String monthlyProof(String groupId, String playerId, int year, int month) =>
+      '/api/groups/$groupId/payments/monthly/$year/$month/$playerId/proof';
+  static String myMonthlyRow(String groupId, int year) =>
+      '/api/groups/$groupId/payments/monthly/$year/me';
+
+  // Payments – cobranças extras
+  static String extraCharges(String groupId) =>
+      '/api/groups/$groupId/payments/extra-charges';
+  static String extraChargeById(String groupId, String chargeId) =>
+      '/api/groups/$groupId/payments/extra-charges/$chargeId';
+  static String extraChargeBulkDiscount(String groupId, String chargeId) =>
+      '/api/groups/$groupId/payments/extra-charges/$chargeId/bulk-discount';
+  static String extraChargePayment(String groupId, String chargeId, String playerId) =>
+      '/api/groups/$groupId/payments/extra-charges/$chargeId/players/$playerId';
+  static String extraChargeProof(String groupId, String chargeId, String playerId) =>
+      '/api/groups/$groupId/payments/extra-charges/$chargeId/$playerId/proof';
+  static String myExtraCharges(String groupId) =>
+      '/api/groups/$groupId/payments/extra-charges/me';
+
+  // Payments – resumo
   static String myPaymentSummary(String groupId) =>
       '/api/groups/$groupId/payments/my';
 

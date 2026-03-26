@@ -32,6 +32,10 @@ dependencies:
   google_fonts: ^6.2.1
   flutter_colorpicker: ^1.1.0
 
+  # Image handling (polls feature)
+  image_picker: ^1.1.2
+  flutter_image_compress: ^2.3.0
+
   # Utilities
   intl: ^0.19.0
   equatable: ^2.0.5

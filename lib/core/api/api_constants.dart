@@ -70,6 +70,28 @@ class ApiConstants {
   static String groupFinanceiroById(String id, String uid)  => '/api/Groups/$id/financeiros/$uid';
   static String usersSearch(String q)                       => '/api/Users?search=${Uri.encodeComponent(q)}';
 
+  // Polls
+  static String polls(String groupId) =>
+      '/api/Polls/group/$groupId';
+  static String pollById(String groupId, String pollId) =>
+      '/api/Polls/group/$groupId/$pollId';
+  static String createEventPoll(String groupId) =>
+      '/api/Polls/group/$groupId/event';
+  static String closePoll(String groupId, String pollId) =>
+      '/api/Polls/group/$groupId/$pollId/close';
+  static String reopenPoll(String groupId, String pollId) =>
+      '/api/Polls/group/$groupId/$pollId/reopen';
+  static String deletePoll(String groupId, String pollId) =>
+      '/api/Polls/group/$groupId/$pollId';
+  static String pollOptions(String groupId, String pollId) =>
+      '/api/Polls/group/$groupId/$pollId/options';
+  static String pollOptionById(String groupId, String pollId, String optId) =>
+      '/api/Polls/group/$groupId/$pollId/options/$optId';
+  static String castVote(String groupId, String pollId) =>
+      '/api/Polls/group/$groupId/$pollId/vote';
+  static String adminVote(String groupId, String pollId) =>
+      '/api/Polls/group/$groupId/$pollId/admin-vote';
+
   // Team Colors
   static String teamColors(String groupId) => '/api/TeamColor/group/$groupId';
   static String teamColorById(String groupId, String id) =>

@@ -14,6 +14,7 @@ import '../../features/group_settings/presentation/pages/group_settings_page.dar
 import '../../features/birthdays/presentation/pages/birthday_page.dart';
 import '../../features/shell/presentation/pages/shell_page.dart';
 import '../../features/visual_stats/presentation/pages/visual_stats_page.dart';
+import '../../features/polls/presentation/pages/polls_page.dart';
 
 // ── Placeholder para rotas ainda não implementadas ────────────────────────────
 class _PlaceholderPage extends StatelessWidget {
@@ -113,7 +114,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path:    '/app/polls',
-            builder: (_, __) => const _PlaceholderPage('Enquetes'),
+            builder: (_, __) => const PollsPage(),
           ),
           GoRoute(
             path:    '/app/birthdays',

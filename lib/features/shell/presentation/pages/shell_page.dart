@@ -6,6 +6,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../auth/presentation/providers/account_store.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../widgets/app_top_bar.dart';
+import '../../../polls/presentation/providers/polls_provider.dart';
 
 class ShellPage extends ConsumerStatefulWidget {
   final Widget child;
@@ -118,22 +119,27 @@ class _TabItem {
   });
 }
 
-class _MoreSheet extends StatelessWidget {
+class _MoreSheet extends ConsumerWidget {
   const _MoreSheet();
 
   static const _items = [
-    (Icons.calendar_month_outlined, 'Calendário',    '/app/calendar'),
-    (Icons.palette_outlined,        'Cores',         '/app/team-colors'),
-    (Icons.bar_chart_outlined,      'Visual Stats',  '/app/visual-stats'),
-    (Icons.payments_outlined,       'Pagamentos',    '/app/payments'),
-    (Icons.how_to_vote_outlined,    'Enquetes',      '/app/polls'),
-    (Icons.cake_outlined,           'Aniversários',  '/app/birthdays'),
-    (Icons.settings_outlined,       'Configurações', '/app/settings'),
-    (Icons.manage_accounts_outlined,'Usuários',      '/app/admin/users'),
+    (Icons.calendar_month_outlined,  'Calendário',    '/app/calendar',    false),
+    (Icons.palette_outlined,         'Cores',         '/app/team-colors', false),
+    (Icons.bar_chart_outlined,       'Visual Stats',  '/app/visual-stats',false),
+    (Icons.payments_outlined,        'Pagamentos',    '/app/payments',    false),
+    (Icons.how_to_vote_outlined,     'Votações',      '/app/polls',       true),
+    (Icons.cake_outlined,            'Aniversários',  '/app/birthdays',   false),
+    (Icons.settings_outlined,        'Configurações', '/app/settings',    false),
+    (Icons.manage_accounts_outlined, 'Usuários',      '/app/admin/users', false),
   ];
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final groupId = ref.watch(accountStoreProvider).activeAccount?.activeGroupId;
+    final pendingCount = groupId != null
+        ? ref.watch(pendingPollsCountProvider(groupId)).valueOrNull ?? 0
+        : 0;
+
     return SafeArea(
       child: SingleChildScrollView(
         child: Column(
@@ -151,9 +157,29 @@ class _MoreSheet extends StatelessWidget {
             const SizedBox(height: 16),
             ..._items.map(
               (item) => ListTile(
-                leading:  Icon(item.$1, size: 22),
-                title:    Text(item.$2,
-                    style: const TextStyle(fontSize: 14)),
+                leading: item.$4 && pendingCount > 0
+                    ? Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Icon(item.$1, size: 22),
+                          Positioned(
+                            top: -4,
+                            right: -4,
+                            child: Container(
+                              width: 16, height: 16,
+                              decoration: const BoxDecoration(
+                                color: Colors.red,
+                                shape: BoxShape.circle,
+                              ),
+                              alignment: Alignment.center,
+                              child: Text('$pendingCount',
+                                style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700)),
+                            ),
+                          ),
+                        ],
+                      )
+                    : Icon(item.$1, size: 22),
+                title: Text(item.$2, style: const TextStyle(fontSize: 14)),
                 onTap: () {
                   Navigator.pop(context);
                   context.go(item.$3);

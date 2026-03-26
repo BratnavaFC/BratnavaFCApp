@@ -162,8 +162,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           const SizedBox(height: 12),
 
                           // ── Manter logado ─────────────────────────────
-                          if (!widget.addMode)
-                            GestureDetector(
+                          GestureDetector(
                               onTap: () => setState(
                                   () => _keepLoggedIn = !_keepLoggedIn),
                               child: Row(

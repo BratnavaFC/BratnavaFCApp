@@ -204,7 +204,13 @@ class _UserMenuButton extends ConsumerWidget {
           ref.read(activePlayerIdProvider.notifier).state = player.playerId;
           context.go('/app');
         },
-        onAddAccount: () => context.go('/login?add=1'),
+        onAddAccount: () {
+          // Pequeno delay para garantir que o modal já fechou
+          // antes de disparar a navegação do GoRouter.
+          Future.microtask(() {
+            if (context.mounted) context.go('/login?add=1');
+          });
+        },
         onLogout: () async {
           await ref.read(authNotifierProvider.notifier).logout();
           if (context.mounted) context.go('/login');

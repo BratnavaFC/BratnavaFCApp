@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../shared/presentation/widgets/group_icon_renderer.dart';
+import '../../../group_settings/presentation/providers/group_settings_provider.dart';
 import '../../domain/entities/recent_match.dart';
 
-class RecentMatchCard extends StatelessWidget {
+class RecentMatchCard extends ConsumerWidget {
   final RecentMatch match;
   final String      groupId;
 
@@ -15,7 +18,7 @@ class RecentMatchCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final d      = match.playedAt.toLocal();
 
@@ -34,6 +37,10 @@ class RecentMatchCard extends StatelessWidget {
     };
 
     final borderColor = isDark ? AppColors.slate700 : AppColors.slate200;
+
+    // Ícones da patota (com fallback para defaults enquanto carrega)
+    final settings = ref.watch(groupSettingsProvider(groupId)).valueOrNull;
+    final icons    = GroupIcons.from(settings);
 
     return GestureDetector(
       onTap: () => context.push('/app/history/$groupId/${match.matchId}'),
@@ -175,24 +182,46 @@ class RecentMatchCard extends StatelessWidget {
 
                             // Gols
                             if (match.goals > 0)
-                              Text(
-                                '⚽ ${match.goals}',
-                                style: TextStyle(
-                                  fontSize:   10,
-                                  fontWeight: FontWeight.w500,
-                                  color: isDark ? AppColors.slate400 : AppColors.slate500,
-                                ),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  renderGroupIcon(
+                                    icons.goal,
+                                    size:  10,
+                                    color: isDark ? AppColors.slate400 : AppColors.slate500,
+                                  ),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    '${match.goals}',
+                                    style: TextStyle(
+                                      fontSize:   10,
+                                      fontWeight: FontWeight.w500,
+                                      color: isDark ? AppColors.slate400 : AppColors.slate500,
+                                    ),
+                                  ),
+                                ],
                               ),
 
                             // Assistências
                             if (match.assists > 0)
-                              Text(
-                                '🅰 ${match.assists}',
-                                style: TextStyle(
-                                  fontSize:   10,
-                                  fontWeight: FontWeight.w500,
-                                  color: isDark ? AppColors.slate400 : AppColors.slate500,
-                                ),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  renderGroupIcon(
+                                    icons.assist,
+                                    size:  10,
+                                    color: isDark ? AppColors.slate400 : AppColors.slate500,
+                                  ),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    '${match.assists}',
+                                    style: TextStyle(
+                                      fontSize:   10,
+                                      fontWeight: FontWeight.w500,
+                                      color: isDark ? AppColors.slate400 : AppColors.slate500,
+                                    ),
+                                  ),
+                                ],
                               ),
                           ],
                         ),

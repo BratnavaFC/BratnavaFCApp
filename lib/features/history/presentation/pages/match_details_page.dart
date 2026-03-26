@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../shared/presentation/widgets/group_icon_renderer.dart';
 import '../../../auth/presentation/providers/account_store.dart';
+import '../../../group_settings/presentation/providers/group_settings_provider.dart';
 import '../../domain/entities/match_details.dart';
 import '../providers/history_provider.dart';
 
@@ -27,13 +29,15 @@ class _MatchDetailsPageState extends ConsumerState<MatchDetailsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark   = Theme.of(context).brightness == Brightness.dark;
-    final account  = ref.watch(accountStoreProvider).activeAccount;
-    final isAdmin  = account != null &&
+    final isDark    = Theme.of(context).brightness == Brightness.dark;
+    final account   = ref.watch(accountStoreProvider).activeAccount;
+    final isAdmin   = account != null &&
         (account.isAdmin || account.groupAdminIds.isNotEmpty);
-    final async    = ref.watch(matchDetailsProvider(
+    final async     = ref.watch(matchDetailsProvider(
       (groupId: widget.groupId, matchId: widget.matchId),
     ));
+    final settings  = ref.watch(groupSettingsProvider(widget.groupId)).valueOrNull;
+    final icons     = GroupIcons.from(settings);
 
     return async.when(
       loading: () => _LoadingSkeleton(isDark: isDark),
@@ -68,6 +72,7 @@ class _MatchDetailsPageState extends ConsumerState<MatchDetailsPage> {
         isDark:        isDark,
         isAdmin:       isAdmin,
         goalsTab:      _goalsTab,
+        icons:         icons,
         onGoalsTab:    (t) => setState(() => _goalsTab = t),
         onBack:        () => context.go('/app/history'),
       ),
@@ -84,6 +89,7 @@ class _DetailsBody extends StatelessWidget {
   final int          goalsTab;
   final void Function(int) onGoalsTab;
   final VoidCallback onBack;
+  final GroupIcons   icons;
 
   const _DetailsBody({
     required this.data,
@@ -92,6 +98,7 @@ class _DetailsBody extends StatelessWidget {
     required this.goalsTab,
     required this.onGoalsTab,
     required this.onBack,
+    required this.icons,
   });
 
   Color get aColor => _hexColor(data.teamAColor?.hexValue) ?? const Color(0xFF0f172a);
@@ -162,6 +169,7 @@ class _DetailsBody extends StatelessWidget {
                 bName:    bName,
                 mvpPlayer: mvpPlayer,
                 isDark:   isDark,
+                icons:    icons,
               ),
 
               const SizedBox(height: 12),
@@ -192,6 +200,7 @@ class _DetailsBody extends StatelessWidget {
                 aName:  aName,
                 bName:  bName,
                 isDark: isDark,
+                icons:  icons,
               ),
 
               const SizedBox(height: 12),
@@ -210,6 +219,7 @@ class _DetailsBody extends StatelessWidget {
                 aName:     aName,
                 bName:     bName,
                 isDark:    isDark,
+                icons:     icons,
               ),
 
               // MVP section (only when match has MVP data)
@@ -223,6 +233,7 @@ class _DetailsBody extends StatelessWidget {
                   bName:      bName,
                   isAdmin:    isAdmin,
                   isDark:     isDark,
+                  icons:      icons,
                 ),
               ],
 
@@ -243,6 +254,7 @@ class _HeroCard extends StatelessWidget {
   final String aName, bName;
   final MatchPlayer? mvpPlayer;
   final bool isDark;
+  final GroupIcons icons;
 
   const _HeroCard({
     required this.data,
@@ -252,6 +264,7 @@ class _HeroCard extends StatelessWidget {
     required this.bName,
     required this.mvpPlayer,
     required this.isDark,
+    required this.icons,
   });
 
   @override
@@ -450,8 +463,7 @@ class _HeroCard extends StatelessWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.emoji_events_rounded,
-                              size: 16, color: Color(0xFFfbbf24)),
+                          renderGroupIcon(icons.mvp, size: 16, color: const Color(0xFFfbbf24)),
                           const SizedBox(width: 6),
                           Text(
                             'MVP: ${mvpPlayer!.playerName}',
@@ -497,6 +509,7 @@ class _TeamCards extends StatelessWidget {
   final Color aColor, bColor;
   final String aName, bName;
   final bool isDark;
+  final GroupIcons icons;
 
   const _TeamCards({
     required this.teamAPlayers,
@@ -506,6 +519,7 @@ class _TeamCards extends StatelessWidget {
     required this.aName,
     required this.bName,
     required this.isDark,
+    required this.icons,
   });
 
   @override
@@ -521,6 +535,7 @@ class _TeamCards extends StatelessWidget {
               color:   aColor,
               name:    aName,
               isDark:  isDark,
+              icons:   icons,
             ),
           ),
           const SizedBox(width: 10),
@@ -530,6 +545,7 @@ class _TeamCards extends StatelessWidget {
               color:   bColor,
               name:    bName,
               isDark:  isDark,
+              icons:   icons,
             ),
           ),
         ],
@@ -540,15 +556,17 @@ class _TeamCards extends StatelessWidget {
 
 class _TeamCard extends StatelessWidget {
   final List<MatchPlayer> players;
-  final Color  color;
-  final String name;
-  final bool   isDark;
+  final Color      color;
+  final String     name;
+  final bool       isDark;
+  final GroupIcons icons;
 
   const _TeamCard({
     required this.players,
     required this.color,
     required this.name,
     required this.isDark,
+    required this.icons,
   });
 
   @override
@@ -633,8 +651,8 @@ class _TeamCard extends StatelessWidget {
               child: Row(
                 children: [
                   if (p.isGoalkeeper) ...[
-                    Icon(
-                      Icons.sports_rounded,
+                    renderGroupIcon(
+                      icons.goalkeeper,
                       size:  14,
                       color: isDark ? AppColors.slate400 : AppColors.slate500,
                     ),
@@ -652,10 +670,10 @@ class _TeamCard extends StatelessWidget {
                     ),
                   ),
                   if (p.isMvp)
-                    const Icon(
-                      Icons.emoji_events_rounded,
+                    renderGroupIcon(
+                      icons.mvp,
                       size:  13,
-                      color: Color(0xFFfbbf24),
+                      color: const Color(0xFFfbbf24),
                     ),
                 ],
               ),
@@ -676,11 +694,12 @@ class _GoalWithTeam {
 
 class _GoalsSection extends StatelessWidget {
   final List<_GoalWithTeam> goals;
-  final int    tab;
-  final void   Function(int) onTab;
-  final Color  aColor, bColor;
-  final String aName, bName;
-  final bool   isDark;
+  final int        tab;
+  final void       Function(int) onTab;
+  final Color      aColor, bColor;
+  final String     aName, bName;
+  final bool       isDark;
+  final GroupIcons icons;
 
   const _GoalsSection({
     required this.goals,
@@ -691,6 +710,7 @@ class _GoalsSection extends StatelessWidget {
     required this.aName,
     required this.bName,
     required this.isDark,
+    required this.icons,
   });
 
   List<_GoalWithTeam> get _filtered {
@@ -768,6 +788,7 @@ class _GoalsSection extends StatelessWidget {
                 aColor:  aColor,
                 bColor:  bColor,
                 isDark:  isDark,
+                icons:   icons,
               )),
           ],
         ),
@@ -778,14 +799,16 @@ class _GoalsSection extends StatelessWidget {
 
 class _GoalRow extends StatelessWidget {
   final _GoalWithTeam goalWithTeam;
-  final Color aColor, bColor;
-  final bool  isDark;
+  final Color      aColor, bColor;
+  final bool       isDark;
+  final GroupIcons icons;
 
   const _GoalRow({
     required this.goalWithTeam,
     required this.aColor,
     required this.bColor,
     required this.isDark,
+    required this.icons,
   });
 
   @override
@@ -822,7 +845,8 @@ class _GoalRow extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Text('⚽ ', style: TextStyle(fontSize: 13)),
+                    renderGroupIcon(icons.goal, size: 13),
+                    const SizedBox(width: 4),
                     Expanded(
                       child: Text(
                         g.scorerName ?? '—',
@@ -858,14 +882,26 @@ class _GoalRow extends StatelessWidget {
                 if (g.assistName != null && g.assistName!.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 2),
-                    child: Text(
-                      '🅰 ${g.assistName}',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: isDark ? AppColors.slate400 : AppColors.slate500,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    child: Row(
+                      children: [
+                        renderGroupIcon(
+                          icons.assist,
+                          size:  11,
+                          color: isDark ? AppColors.slate400 : AppColors.slate500,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            g.assistName!,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isDark ? AppColors.slate400 : AppColors.slate500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
               ],
@@ -1012,6 +1048,7 @@ class _MvpSection extends StatelessWidget {
   final String               bName;
   final bool                 isAdmin;
   final bool                 isDark;
+  final GroupIcons           icons;
 
   const _MvpSection({
     required this.mvp,
@@ -1020,6 +1057,7 @@ class _MvpSection extends StatelessWidget {
     required this.bName,
     required this.isAdmin,
     required this.isDark,
+    required this.icons,
   });
 
   String get _teamName {
@@ -1062,8 +1100,8 @@ class _MvpSection extends StatelessWidget {
                     color:  gold.withAlpha(isDark ? 40 : 30),
                     shape:  BoxShape.circle,
                   ),
-                  child: const Center(
-                    child: Text('🏆', style: TextStyle(fontSize: 20)),
+                  child: Center(
+                    child: renderGroupIcon(icons.mvp, size: 20, color: gold),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -1144,9 +1182,9 @@ class _MvpSection extends StatelessWidget {
                       child: Row(
                         children: [
                           if (isWinner)
-                            const Padding(
-                              padding: EdgeInsets.only(right: 4),
-                              child: Text('🏆', style: TextStyle(fontSize: 12)),
+                            Padding(
+                              padding: const EdgeInsets.only(right: 4),
+                              child: renderGroupIcon(icons.mvp, size: 12, color: gold),
                             )
                           else
                             const SizedBox(width: 20),

@@ -2,8 +2,8 @@ import 'dart:math' show min;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../shared/presentation/widgets/group_icon_renderer.dart';
 import '../../../auth/presentation/providers/account_store.dart';
-import '../../../group_settings/domain/entities/group_settings.dart';
 import '../../../group_settings/presentation/providers/group_settings_provider.dart';
 import '../../domain/entities/visual_stats_report.dart';
 import '../providers/visual_stats_provider.dart';
@@ -79,44 +79,6 @@ extension _SortKeyLabel on _SortKey {
   };
 }
 
-// ── Icon rendering (mirrors site's IconRenderer) ──────────────────────────────
-
-const _kLucideIcons = <String, IconData>{
-  'Trophy':     Icons.emoji_events_outlined,
-  'User':       Icons.person_outline,
-  'Target':     Icons.gps_fixed,
-  'Medal':      Icons.military_tech_outlined,
-  'ShieldAlert':Icons.shield_outlined,
-  'Radar':      Icons.radar,
-  'Link':       Icons.link_outlined,
-  'Handshake':  Icons.handshake_outlined,
-  'AlertTriangle': Icons.warning_amber_outlined,
-  'Ban':        Icons.block_outlined,
-  'Award':      Icons.workspace_premium_outlined,
-  'Crown':      Icons.workspace_premium_outlined,
-  'UserRound':  Icons.account_circle_outlined,
-  'Shirt':      Icons.dry_cleaning_outlined,
-};
-
-Widget _renderIcon(String value, {double size = 14, Color? color}) {
-  if (value.startsWith('lucide:')) {
-    final name = value.substring(7);
-    final data = _kLucideIcons[name];
-    final c    = color ?? AppColors.slate600;
-    if (data != null) return Icon(data, size: size, color: c);
-    return Text('?', style: TextStyle(fontSize: size * 0.8, color: c));
-  }
-  if (value.startsWith('letter:')) {
-    final text  = value.substring(7);
-    final scale = text.length <= 2 ? 0.85 : text.length == 3 ? 0.72 : 0.60;
-    return Text(text, style: TextStyle(
-      fontSize: size * scale, fontWeight: FontWeight.w800,
-      letterSpacing: -0.8, height: 1, color: color ?? AppColors.slate600,
-    ));
-  }
-  return Text(value, style: TextStyle(fontSize: size));
-}
-
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 class VisualStatsPage extends ConsumerStatefulWidget {
@@ -165,7 +127,7 @@ class _VisualStatsPageState extends ConsumerState<VisualStatsPage> {
 
     final async    = ref.watch(visualStatsProvider(groupId));
     final settings = ref.watch(groupSettingsProvider(groupId)).valueOrNull;
-    final icons    = _GroupIcons.from(settings);
+    final icons    = GroupIcons.from(settings);
 
     return Scaffold(
       body: RefreshIndicator(
@@ -222,7 +184,7 @@ class _VisualStatsPageState extends ConsumerState<VisualStatsPage> {
 
   Widget _buildHeader(
     AsyncValue<PlayerVisualStatsReport> async,
-    _GroupIcons icons,
+    GroupIcons icons,
   ) {
     final report = async.valueOrNull;
     final playerCount = report?.players.length ?? 0;
@@ -330,25 +292,6 @@ class _VisualStatsPageState extends ConsumerState<VisualStatsPage> {
       );
 }
 
-// ── Group icons helper ────────────────────────────────────────────────────────
-
-class _GroupIcons {
-  final String goal, goalkeeper, assist, ownGoal, mvp, player;
-  const _GroupIcons({
-    required this.goal, required this.goalkeeper, required this.assist,
-    required this.ownGoal, required this.mvp, required this.player,
-  });
-
-  factory _GroupIcons.from(GroupSettings? s) => _GroupIcons(
-    goal:       s?.goalIcon       ?? '⚽',
-    goalkeeper: s?.goalkeeperIcon ?? '🧤',
-    assist:     s?.assistIcon     ?? '🤝',
-    ownGoal:    s?.ownGoalIcon    ?? '🚩',
-    mvp:        s?.mvpIcon        ?? 'lucide:Trophy',
-    player:     s?.playerIcon     ?? 'lucide:User',
-  );
-}
-
 // ── Rankings content ──────────────────────────────────────────────────────────
 
 class _RankingsContent extends StatelessWidget {
@@ -357,7 +300,7 @@ class _RankingsContent extends StatelessWidget {
   final _SortKey                      sortKey;
   final String                        search;
   final TextEditingController         searchCtrl;
-  final _GroupIcons                   icons;
+  final GroupIcons                   icons;
   final ValueChanged<_SortKey>        onSort;
   final ValueChanged<String>          onSearch;
   final ValueChanged<String>          onPlayerTap;
@@ -441,7 +384,7 @@ class _RankingsContent extends StatelessWidget {
 
 class _RankingTable extends StatelessWidget {
   final List<PlayerVisualStatsItem> sorted;
-  final _GroupIcons                 icons;
+  final GroupIcons                 icons;
   final bool                        isDark;
   final ValueChanged<String>        onTap;
 
@@ -481,9 +424,9 @@ class _RankingTable extends StatelessWidget {
               SizedBox(width: _vedW,   child: Center(child: Text('V/E/D', style: head))),
               SizedBox(width: _wrW,    child: Text('WIN RATE', style: head.copyWith(letterSpacing: 0.5))),
               SizedBox(width: _mvpW,   child: Center(child: Text('MVP', style: head))),
-              SizedBox(width: _iconColW, child: Center(child: _renderIcon(icons.goal, size: 12))),
-              SizedBox(width: _iconColW, child: Center(child: _renderIcon(icons.assist, size: 12))),
-              SizedBox(width: _iconColW + 8, child: Center(child: _renderIcon(icons.ownGoal, size: 12))),
+              SizedBox(width: _iconColW, child: Center(child: renderGroupIcon(icons.goal, size: 12))),
+              SizedBox(width: _iconColW, child: Center(child: renderGroupIcon(icons.assist, size: 12))),
+              SizedBox(width: _iconColW + 8, child: Center(child: renderGroupIcon(icons.ownGoal, size: 12))),
             ],
           ),
         ),
@@ -533,7 +476,7 @@ class _RankingTable extends StatelessWidget {
                               padding: const EdgeInsets.symmetric(vertical: 10),
                               child: Row(children: [
                                 if (p.isGoalkeeper) ...[
-                                  _renderIcon(icons.goalkeeper, size: 12,
+                                  renderGroupIcon(icons.goalkeeper, size: 12,
                                       color: isDark ? AppColors.slate400 : AppColors.slate500),
                                   const SizedBox(width: 4),
                                 ],
@@ -544,7 +487,7 @@ class _RankingTable extends StatelessWidget {
                                 )),
                                 if (p.mvps > 0) ...[
                                   const SizedBox(width: 3),
-                                  _renderIcon(icons.mvp, size: 10,
+                                  renderGroupIcon(icons.mvp, size: 10,
                                       color: const Color(0xFFFBBF24)),
                                 ],
                                 if (!p.isActive) ...[
@@ -594,7 +537,7 @@ class _RankingTable extends StatelessWidget {
                           SizedBox(width: _mvpW,
                             child: Center(child: p.mvps > 0
                                 ? Row(mainAxisSize: MainAxisSize.min, children: [
-                                    _renderIcon(icons.mvp, size: 11, color: const Color(0xFFF59E0B)),
+                                    renderGroupIcon(icons.mvp, size: 11, color: const Color(0xFFF59E0B)),
                                     const SizedBox(width: 2),
                                     Text('${p.mvps}', style: const TextStyle(
                                       fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFFF59E0B),
@@ -650,7 +593,7 @@ class _PlayersContent extends StatelessWidget {
   final _SortKey                     sortKey;
   final String                       search;
   final TextEditingController        searchCtrl;
-  final _GroupIcons                  icons;
+  final GroupIcons                  icons;
   final ValueChanged<_SortKey>       onSort;
   final ValueChanged<String>         onSearch;
 
@@ -715,7 +658,7 @@ class _PlayersContent extends StatelessWidget {
 
 class _PlayerDetailSheet extends StatefulWidget {
   final PlayerVisualStatsItem player;
-  final _GroupIcons           icons;
+  final GroupIcons           icons;
   final bool                  isDark;
 
   const _PlayerDetailSheet({
@@ -786,7 +729,7 @@ class _PlayerDetailSheetState extends State<_PlayerDetailSheet> {
 
 class _PlayerListItem extends StatelessWidget {
   final PlayerVisualStatsItem player;
-  final _GroupIcons           icons;
+  final GroupIcons           icons;
   final bool                  isDark;
   final VoidCallback          onTap;
 
@@ -828,7 +771,7 @@ class _PlayerListItem extends StatelessWidget {
               children: [
                 Row(children: [
                   if (player.isGoalkeeper) ...[
-                    _renderIcon(icons.goalkeeper, size: 11,
+                    renderGroupIcon(icons.goalkeeper, size: 11,
                         color: isDark ? AppColors.slate400 : AppColors.slate500),
                     const SizedBox(width: 4),
                   ],
@@ -869,7 +812,7 @@ class _PlayerListItem extends StatelessWidget {
 
 class _PlayerDetailCard extends StatelessWidget {
   final PlayerVisualStatsItem player;
-  final _GroupIcons           icons;
+  final GroupIcons           icons;
   final bool                  isDark;
 
   const _PlayerDetailCard({
@@ -959,14 +902,14 @@ class _PlayerDetailCard extends StatelessWidget {
                             _statChip('${player.losses}D', const Color(0xFFEF4444), bold: true),
                             if (player.mvps > 0)
                               Row(mainAxisSize: MainAxisSize.min, children: [
-                                _renderIcon(icons.mvp, size: 11, color: const Color(0xFFF59E0B)),
+                                renderGroupIcon(icons.mvp, size: 11, color: const Color(0xFFF59E0B)),
                                 const SizedBox(width: 3),
                                 _statChip('${player.mvps} MVP${player.mvps > 1 ? 's' : ''}',
                                     const Color(0xFFF59E0B), bold: true),
                               ]),
                             if (player.goals > 0)
                               Row(mainAxisSize: MainAxisSize.min, children: [
-                                _renderIcon(icons.goal, size: 11,
+                                renderGroupIcon(icons.goal, size: 11,
                                     color: isDark ? AppColors.slate400 : AppColors.slate600),
                                 const SizedBox(width: 3),
                                 _statChip('${player.goals}',
@@ -974,7 +917,7 @@ class _PlayerDetailCard extends StatelessWidget {
                               ]),
                             if (player.assists > 0)
                               Row(mainAxisSize: MainAxisSize.min, children: [
-                                _renderIcon(icons.assist, size: 11,
+                                renderGroupIcon(icons.assist, size: 11,
                                     color: isDark ? AppColors.slate400 : AppColors.slate600),
                                 const SizedBox(width: 3),
                                 _statChip('${player.assists}',
@@ -982,7 +925,7 @@ class _PlayerDetailCard extends StatelessWidget {
                               ]),
                             if (player.ownGoals > 0)
                               Row(mainAxisSize: MainAxisSize.min, children: [
-                                _renderIcon(icons.ownGoal, size: 11,
+                                renderGroupIcon(icons.ownGoal, size: 11,
                                     color: const Color(0xFFEF4444)),
                                 const SizedBox(width: 3),
                                 _statChip('${player.ownGoals} GC',
@@ -1051,7 +994,7 @@ class _PlayerDetailCard extends StatelessWidget {
 class _SynergyCard extends StatelessWidget {
   final PlayerVisualStatsItem player;
   final int                   minTogether;
-  final _GroupIcons           icons;
+  final GroupIcons           icons;
   final bool                  isDark;
   final ValueChanged<int>     onMinChange;
 
@@ -1313,7 +1256,7 @@ Widget _searchField(bool isDark, TextEditingController ctrl, ValueChanged<String
       ),
     );
 
-Widget _sortChips(bool isDark, _SortKey current, _GroupIcons icons, ValueChanged<_SortKey> onSort) =>
+Widget _sortChips(bool isDark, _SortKey current, GroupIcons icons, ValueChanged<_SortKey> onSort) =>
     SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
@@ -1321,9 +1264,9 @@ Widget _sortChips(bool isDark, _SortKey current, _GroupIcons icons, ValueChanged
           final active = k == current;
           Widget label;
           switch (k) {
-            case _SortKey.goals:    label = _renderIcon(icons.goal,    size: 12); break;
-            case _SortKey.assists:  label = _renderIcon(icons.assist,  size: 12); break;
-            case _SortKey.ownGoals: label = _renderIcon(icons.ownGoal, size: 12); break;
+            case _SortKey.goals:    label = renderGroupIcon(icons.goal,    size: 12); break;
+            case _SortKey.assists:  label = renderGroupIcon(icons.assist,  size: 12); break;
+            case _SortKey.ownGoals: label = renderGroupIcon(icons.ownGoal, size: 12); break;
             default:                label = Text(k.shortLabel,
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
                     color: active ? (isDark ? AppColors.slate900 : Colors.white)

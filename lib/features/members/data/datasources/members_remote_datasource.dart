@@ -3,9 +3,9 @@ import '../../../../core/api/api_constants.dart';
 import '../../domain/entities/app_user.dart';
 import '../../domain/entities/group_player.dart';
 
-class PlayersRemoteDataSource {
+class MembersRemoteDataSource {
   final Dio _dio;
-  const PlayersRemoteDataSource(this._dio);
+  const MembersRemoteDataSource(this._dio);
 
   // ── Users ────────────────────────────────────────────────────────────────────
 

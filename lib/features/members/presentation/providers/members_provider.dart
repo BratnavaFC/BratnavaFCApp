@@ -1,18 +1,18 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../auth/presentation/providers/account_store.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
-import '../../data/datasources/players_remote_datasource.dart';
+import '../../data/datasources/members_remote_datasource.dart';
 import '../../domain/entities/app_user.dart';
 import '../../domain/entities/group_player.dart';
 
-final playersDsProvider = Provider<PlayersRemoteDataSource>(
-  (ref) => PlayersRemoteDataSource(ref.watch(dioProvider)),
+final membersDsProvider = Provider<MembersRemoteDataSource>(
+  (ref) => MembersRemoteDataSource(ref.watch(dioProvider)),
 );
 
 // ── Users (admin listing) ─────────────────────────────────────────────────────
 
 final usersProvider = FutureProvider.autoDispose<List<AppUser>>((ref) {
-  final ds = ref.watch(playersDsProvider);
+  final ds = ref.watch(membersDsProvider);
   return ds.fetchUsers();
 });
 
@@ -23,7 +23,7 @@ final myProfileProvider = FutureProvider.autoDispose<AppUser>((ref) async {
   if (account == null) throw Exception('Não autenticado');
 
   try {
-    final ds = ref.watch(playersDsProvider);
+    final ds = ref.watch(membersDsProvider);
     return await ds.fetchUserById(account.userId);
   } catch (_) {
     // Fallback: construct AppUser from account data
@@ -45,7 +45,7 @@ final myProfileProvider = FutureProvider.autoDispose<AppUser>((ref) async {
 final playersProvider =
     FutureProvider.autoDispose.family<List<GroupPlayer>, String>(
   (ref, groupId) {
-    final ds = ref.watch(playersDsProvider);
+    final ds = ref.watch(membersDsProvider);
     return ds.fetchGroupPlayers(groupId);
   },
 );

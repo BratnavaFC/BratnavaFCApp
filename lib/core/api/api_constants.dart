@@ -26,8 +26,17 @@ class ApiConstants {
       '/api/TeamGeneration/visual-stats/$groupId';
 
   // Players (group admin)
-  static String groupPlayers(String groupId) => '/api/Players/group/$groupId';
-  static String playerOps(String id) => '/api/Players/$id';
+  static const String playersCreate                = '/api/Players';
+  static String groupPlayers(String groupId)       => '/api/Players/group/$groupId';
+  static String playerOps(String id)               => '/api/Players/$id';
+  static String playerLeaveGroup(String id)        => '/api/Players/$id/leave-group';
+
+  // Group invites
+  static const String groupInvites                 = '/api/GroupInvites';
+
+  // Users – search (paginated)
+  static String usersListSearch(String q, int pageSize) =>
+      '/api/Users?search=${Uri.encodeComponent(q)}&pageSize=$pageSize';
 
   // Matches
   static String currentMatch(String groupId) =>
@@ -42,6 +51,10 @@ class ApiConstants {
   // Payments
   static String myPaymentSummary(String groupId) =>
       '/api/groups/$groupId/payments/my';
+  static String monthlyGrid(String groupId, int year) =>
+      '/api/groups/$groupId/payments/monthly/$year';
+  static String extraCharges(String groupId) =>
+      '/api/groups/$groupId/payments/extra-charges';
 
   // Calendar
   static String calendarEvents(String groupId, String start, String end) =>

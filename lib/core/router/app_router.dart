@@ -9,7 +9,8 @@ import '../../features/dashboard/presentation/pages/dashboard_page.dart';
 import '../../features/team_colors/presentation/pages/team_colors_page.dart';
 import '../../features/history/presentation/pages/history_page.dart';
 import '../../features/history/presentation/pages/match_details_page.dart';
-import '../../features/players/presentation/pages/players_page.dart';
+import '../../features/members/presentation/pages/members_page.dart';
+import '../../features/groups/presentation/pages/groups_page.dart';
 import '../../features/group_settings/presentation/pages/group_settings_page.dart';
 import '../../features/birthdays/presentation/pages/birthday_page.dart';
 import '../../features/shell/presentation/pages/shell_page.dart';
@@ -84,7 +85,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path:    '/app/groups',
-            builder: (_, __) => const _PlaceholderPage('Grupos'),
+            builder: (_, __) => const GroupsPage(),
           ),
           GoRoute(
             path:    '/app/history',
@@ -127,7 +128,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path:    '/app/admin/users',
-            builder: (_, __) => const PlayersPage(),
+            builder: (_, __) => const MembersPage(),
           ),
         ],
       ),

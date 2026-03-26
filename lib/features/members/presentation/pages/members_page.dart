@@ -5,12 +5,12 @@ import '../../../../shared/presentation/widgets/avatar_widget.dart';
 import '../../../auth/domain/entities/account.dart';
 import '../../../auth/presentation/providers/account_store.dart';
 import '../../domain/entities/app_user.dart';
-import '../providers/players_provider.dart';
+import '../providers/members_provider.dart';
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
-class PlayersPage extends ConsumerWidget {
-  const PlayersPage({super.key});
+class MembersPage extends ConsumerWidget {
+  const MembersPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -914,7 +914,7 @@ class _UserDetailSheetState extends ConsumerState<_UserDetailSheet> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
     try {
-      final ds = ref.read(playersDsProvider);
+      final ds = ref.read(membersDsProvider);
       String? birthIso;
       final bRaw = _birthCtrl.text.trim();
       if (bRaw.isNotEmpty) {
@@ -992,7 +992,7 @@ class _UserDetailSheetState extends ConsumerState<_UserDetailSheet> {
     if (confirmed != true) return;
     setState(() => _loading = true);
     try {
-      await ref.read(playersDsProvider).toggleUserActive(
+      await ref.read(membersDsProvider).toggleUserActive(
             widget.user.id,
             activate: activate,
           );
@@ -1470,7 +1470,7 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
     try {
-      final ds = ref.read(playersDsProvider);
+      final ds = ref.read(membersDsProvider);
       String? birthIso;
       final bRaw = _birthCtrl.text.trim();
       if (bRaw.isNotEmpty) {
@@ -1786,7 +1786,7 @@ class _ChangePasswordSheetState
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
     try {
-      final ds = ref.read(playersDsProvider);
+      final ds = ref.read(membersDsProvider);
       await ds.changePassword(
         widget.userId,
         currentPassword: _currentCtrl.text,

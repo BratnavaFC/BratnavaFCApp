@@ -75,10 +75,6 @@ class ApiConstants {
   // Payments – resumo
   static String myPaymentSummary(String groupId) =>
       '/api/groups/$groupId/payments/my';
-  static String monthlyGrid(String groupId, int year) =>
-      '/api/groups/$groupId/payments/monthly/$year';
-  static String extraCharges(String groupId) =>
-      '/api/groups/$groupId/payments/extra-charges';
 
   // Calendar
   static String calendarEvents(String groupId, String start, String end) =>

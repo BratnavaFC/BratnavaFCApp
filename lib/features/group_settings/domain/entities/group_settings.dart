@@ -171,6 +171,11 @@ class GroupSettings {
   final String? mvpIcon;
   final String? playerIcon;
 
+  // MVP tie rule — mirrors site's mvpTieRule / mvpTieMaxPlayers
+  // 0 = NoMvp  · 1 = AllMvp (default)  · 2 = AllMvpUpToMax
+  final int mvpTieRule;
+  final int mvpTieMaxPlayers;
+
   // Meta
   final bool isPersisted; // false = using defaults, prompt user to save
 
@@ -188,6 +193,8 @@ class GroupSettings {
     this.ownGoalIcon,
     this.mvpIcon,
     this.playerIcon,
+    this.mvpTieRule        = 1,
+    this.mvpTieMaxPlayers  = 2,
     this.isPersisted       = false,
   });
 
@@ -211,6 +218,8 @@ class GroupSettings {
       ownGoalIcon:        j['ownGoalIcon']              as String?,
       mvpIcon:            j['mvpIcon']                  as String?,
       playerIcon:         j['playerIcon']               as String?,
+      mvpTieRule:         (j['mvpTieRule']        as int?) ?? 1,
+      mvpTieMaxPlayers:   (j['mvpTieMaxPlayers']  as int?) ?? 2,
       isPersisted:        (j['isPersisted'] as bool?)   ?? false,
     );
   }
@@ -230,6 +239,8 @@ class GroupSettings {
     required String? ownGoalIcon,
     required String? mvpIcon,
     required String? playerIcon,
+    required int     mvpTieRule,
+    int?             mvpTieMaxPlayers,
   }) =>
       {
         'minPlayers':         minPlayers,
@@ -246,5 +257,8 @@ class GroupSettings {
         'paymentMode':        paymentMode,
         // monthlyFee only sent when Monthly mode (matches site behaviour)
         'monthlyFee': paymentMode == 0 ? monthlyFee : null,
+        'mvpTieRule':         mvpTieRule,
+        // mvpTieMaxPlayers only sent when rule == 2 (mirrors site behaviour)
+        'mvpTieMaxPlayers': mvpTieRule == 2 ? mvpTieMaxPlayers : null,
       };
 }

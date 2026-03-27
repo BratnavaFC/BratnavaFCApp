@@ -217,6 +217,12 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
   // ── Icon state ────────────────────────────────────────────────────────────
   late Map<String, String?> _icons;
 
+  // ── MVP tie rule ──────────────────────────────────────────────────────────
+  // 0 = Nenhum recebe MVP · 1 = Todos recebem MVP · 2 = Todos até um máximo
+  late int _mvpTieRule;
+  late int _mvpTieMaxPlayers;
+  late final TextEditingController _mvpMaxCtrl;
+
   // ── Save state ────────────────────────────────────────────────────────────
   bool    _saving     = false;
   bool    _isPersisted = false;
@@ -249,6 +255,9 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
       'mvpIcon':        s.mvpIcon,
       'playerIcon':     s.playerIcon,
     };
+    _mvpTieRule       = s.mvpTieRule;
+    _mvpTieMaxPlayers = s.mvpTieMaxPlayers;
+    _mvpMaxCtrl       = TextEditingController(text: s.mvpTieMaxPlayers.toString());
   }
 
   @override
@@ -257,6 +266,7 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
     _minCtrl.dispose();
     _maxCtrl.dispose();
     _feeCtrl.dispose();
+    _mvpMaxCtrl.dispose();
     super.dispose();
   }
 
@@ -297,6 +307,8 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
         ownGoalIcon:        _icons['ownGoalIcon'],
         mvpIcon:            _icons['mvpIcon'],
         playerIcon:         _icons['playerIcon'],
+        mvpTieRule:         _mvpTieRule,
+        mvpTieMaxPlayers:   _mvpTieRule == 2 ? _mvpTieMaxPlayers : null,
       );
       ref.invalidate(groupSettingsProvider(widget.groupId));
       if (mounted) {
@@ -633,6 +645,19 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
         ),
       ),
 
+      const SizedBox(height: 12),
+
+      // ── Empate no MVP ─────────────────────────────────────────────────────
+      _subCard(
+        isDark:   isDark,
+        accentBg: const Color(0xFFFFFBEB),
+        accentFg: const Color(0xFFD97706),
+        icon:     Icons.emoji_events_outlined,
+        title:    'Empate no MVP',
+        subtitle: 'O que acontece quando dois ou mais jogadores empatam em votos',
+        child: _buildMvpTieRule(isDark),
+      ),
+
       const SizedBox(height: 20),
 
       // ── Save button + status ──────────────────────────────────────────────
@@ -724,6 +749,99 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
       ),
     );
   }
+
+  // ── MVP tie rule builder ─────────────────────────────────────────────────
+
+  static const _kTieRules = [
+    (val: 0, label: 'Nenhum recebe MVP',    desc: 'Em caso de empate, ninguém é eleito.'),
+    (val: 1, label: 'Todos recebem MVP',    desc: 'Todos os empatados são eleitos MVPs.'),
+    (val: 2, label: 'Todos até um máximo',  desc: 'Todos recebem MVP se o número de empatados não ultrapassar o limite.'),
+  ];
+
+  Widget _buildMvpTieRule(bool isDark) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      // Radio options
+      for (final rule in _kTieRules) ...[
+        GestureDetector(
+          onTap: () => setState(() => _mvpTieRule = rule.val),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: _mvpTieRule == rule.val
+                  ? (isDark ? Colors.white : AppColors.slate900)
+                  : (isDark ? AppColors.slate800 : Colors.white),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: _mvpTieRule == rule.val
+                    ? (isDark ? Colors.white : AppColors.slate900)
+                    : (isDark ? AppColors.slate600 : AppColors.slate200),
+                width: 2,
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        rule.label,
+                        style: TextStyle(
+                          fontSize:   13,
+                          fontWeight: FontWeight.w600,
+                          color: _mvpTieRule == rule.val
+                              ? (isDark ? AppColors.slate900 : Colors.white)
+                              : (isDark ? Colors.white : AppColors.slate900),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        rule.desc,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: _mvpTieRule == rule.val
+                              ? (isDark ? AppColors.slate500 : Colors.white70)
+                              : (isDark ? AppColors.slate500 : AppColors.slate400),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (rule.val != _kTieRules.last.val) const SizedBox(height: 8),
+      ],
+
+      // Max players input — only when rule == 2
+      if (_mvpTieRule == 2) ...[
+        const SizedBox(height: 12),
+        _labeledInput(
+          label: 'Máximo de MVPs empatados',
+          ctrl:  _mvpMaxCtrl,
+          hint:  '2',
+          isDark: isDark,
+          type:  TextInputType.number,
+          fmts:  [FilteringTextInputFormatter.digitsOnly],
+          onChanged: (v) {
+            final n = int.tryParse(v) ?? 2;
+            setState(() => _mvpTieMaxPlayers = n < 2 ? 2 : n);
+          },
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Se $_mvpTieMaxPlayers ou menos jogadores empatarem, todos recebem MVP. Se ultrapassar, ninguém recebe.',
+          style: TextStyle(
+            fontSize: 11,
+            color: isDark ? AppColors.slate500 : AppColors.slate400,
+          ),
+        ),
+      ],
+    ],
+  );
 
   // ── Section 3: Ícones da patota ───────────────────────────────────────────
 
@@ -1298,6 +1416,7 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
     required bool                    isDark,
     TextInputType?                   type,
     List<TextInputFormatter>?        fmts,
+    ValueChanged<String>?            onChanged,
   }) =>
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1313,6 +1432,7 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
             controller:      ctrl,
             keyboardType:    type,
             inputFormatters: fmts,
+            onChanged:       onChanged,
             style: TextStyle(
               fontSize: 13,
               color: isDark ? AppColors.slate100 : AppColors.slate800,

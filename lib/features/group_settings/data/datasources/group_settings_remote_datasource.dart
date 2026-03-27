@@ -29,6 +29,8 @@ class GroupSettingsRemoteDataSource {
     required String? ownGoalIcon,
     required String? mvpIcon,
     required String? playerIcon,
+    required int     mvpTieRule,
+    int?             mvpTieMaxPlayers,
   }) async {
     final body = const GroupSettings().toJson(
       minPlayers:         minPlayers,
@@ -44,6 +46,8 @@ class GroupSettingsRemoteDataSource {
       ownGoalIcon:        ownGoalIcon,
       mvpIcon:            mvpIcon,
       playerIcon:         playerIcon,
+      mvpTieRule:         mvpTieRule,
+      mvpTieMaxPlayers:   mvpTieMaxPlayers,
     );
     await _dio.put(ApiConstants.groupSettings(groupId), data: body);
   }

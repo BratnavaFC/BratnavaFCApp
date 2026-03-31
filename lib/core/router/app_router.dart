@@ -16,6 +16,7 @@ import '../../features/birthdays/presentation/pages/birthday_page.dart';
 import '../../features/shell/presentation/pages/shell_page.dart';
 import '../../features/visual_stats/presentation/pages/visual_stats_page.dart';
 import '../../features/polls/presentation/pages/polls_page.dart';
+import '../../features/matches/presentation/pages/matches_page.dart';
 import '../../features/payments/presentation/pages/payments_page.dart';
 
 // ── Placeholder para rotas ainda não implementadas ────────────────────────────
@@ -81,7 +82,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path:    '/app/matches',
-            builder: (_, __) => const _PlaceholderPage('Partidas'),
+            builder: (_, __) => const MatchesPage(),
           ),
           GoRoute(
             path:    '/app/groups',

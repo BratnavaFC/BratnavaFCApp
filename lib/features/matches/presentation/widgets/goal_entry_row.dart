@@ -1,0 +1,126 @@
+import 'package:flutter/material.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../domain/entities/match_models.dart';
+
+/// Linha de gol exibida na lista de Steps 4 e 6.
+class GoalEntryRow extends StatelessWidget {
+  final MatchGoal goal;
+  final String teamAName;
+  final String teamBName;
+  final Color? teamAColor;
+  final Color? teamBColor;
+  final bool isAdmin;
+  final bool loading;
+  final VoidCallback? onRemove;
+
+  const GoalEntryRow({
+    super.key,
+    required this.goal,
+    required this.teamAName,
+    required this.teamBName,
+    this.teamAColor,
+    this.teamBColor,
+    this.isAdmin  = false,
+    this.loading  = false,
+    this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isTeamA = goal.team == 1;
+    final color   = isTeamA ? (teamAColor ?? AppColors.blue500) : (teamBColor ?? AppColors.rose500);
+    final teamName = isTeamA ? teamAName : teamBName;
+
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 3),
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          children: [
+            // Indicador de time
+            Container(
+              width: 4,
+              height: 40,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 10),
+            // Ícone + tempo
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  goal.isOwnGoal ? Icons.sports_soccer : Icons.sports_soccer,
+                  size: 18,
+                  color: goal.isOwnGoal ? AppColors.rose500 : color,
+                ),
+                if (goal.time != null)
+                  Text(
+                    goal.time!,
+                    style: const TextStyle(fontSize: 10, color: AppColors.slate500),
+                  ),
+              ],
+            ),
+            const SizedBox(width: 10),
+            // Detalhes
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        goal.scorerName ?? '—',
+                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                      ),
+                      if (goal.isOwnGoal) ...[
+                        const SizedBox(width: 4),
+                        const Text(
+                          '(gol contra)',
+                          style: TextStyle(fontSize: 11, color: AppColors.rose500),
+                        ),
+                      ],
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      Text(
+                        teamName,
+                        style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w500),
+                      ),
+                      if (goal.assistName != null) ...[
+                        const Text(' · assist: ', style: TextStyle(fontSize: 11, color: AppColors.slate400)),
+                        Text(
+                          goal.assistName!,
+                          style: const TextStyle(fontSize: 11, color: AppColors.slate500),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            // Botão remover (admin)
+            if (isAdmin)
+              loading
+                  ? const SizedBox(
+                      width: 20, height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : IconButton(
+                      icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.rose400),
+                      onPressed: onRemove,
+                      tooltip: 'Remover gol',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                    ),
+          ],
+        ),
+      ),
+    );
+  }
+}

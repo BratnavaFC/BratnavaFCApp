@@ -1,0 +1,119 @@
+import 'package:flutter/material.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../shared/presentation/widgets/avatar_widget.dart';
+import '../../domain/entities/match_models.dart';
+
+/// Tile de jogador reutilizável em Aceitação e MatchMaking.
+class PlayerListTile extends StatelessWidget {
+  final MatchPlayerInfo player;
+  final bool isCurrentUser;
+  final bool isAdmin;
+  final bool loading;
+
+  /// Chamado quando admin quer remover / recusar o jogador (ícone ❌).
+  final VoidCallback? onRemove;
+
+  /// Chamado quando o próprio usuário quer aceitar (ícone ✅).
+  final VoidCallback? onAccept;
+
+  /// Cor de destaque do tile (null = padrão).
+  final Color? highlightColor;
+
+  const PlayerListTile({
+    super.key,
+    required this.player,
+    this.isCurrentUser = false,
+    this.isAdmin       = false,
+    this.loading       = false,
+    this.onRemove,
+    this.onAccept,
+    this.highlightColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 3),
+      decoration: BoxDecoration(
+        color:        highlightColor ?? Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: ListTile(
+        dense:        true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+        leading: AvatarWidget(name: player.playerName, size: 36),
+        title: Row(
+          children: [
+            Flexible(
+              child: Text(
+                player.playerName,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (player.isGoalkeeper) ...[
+              const SizedBox(width: 6),
+              const Icon(Icons.sports_soccer, size: 14, color: AppColors.slate400),
+            ],
+            if (player.isGuest) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: AppColors.amber200,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  'Convidado',
+                  style: TextStyle(fontSize: 10, color: AppColors.orange700),
+                ),
+              ),
+            ],
+            if (isCurrentUser) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: AppColors.blue200,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  'Você',
+                  style: TextStyle(fontSize: 10, color: AppColors.blue600),
+                ),
+              ),
+            ],
+          ],
+        ),
+        trailing: loading
+            ? const SizedBox(
+                width: 20, height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (onAccept != null)
+                    IconButton(
+                      icon: const Icon(Icons.check_circle_outline, color: AppColors.emerald500),
+                      onPressed: onAccept,
+                      tooltip: 'Aceitar',
+                      iconSize: 22,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                    ),
+                  if (onRemove != null && isAdmin)
+                    IconButton(
+                      icon: const Icon(Icons.cancel_outlined, color: AppColors.rose500),
+                      onPressed: onRemove,
+                      tooltip: 'Remover',
+                      iconSize: 22,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                    ),
+                ],
+              ),
+      ),
+    );
+  }
+}

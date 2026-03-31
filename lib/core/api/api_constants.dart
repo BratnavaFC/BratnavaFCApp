@@ -133,4 +133,35 @@ class ApiConstants {
       '/api/TeamColor/group/$groupId/$id/activate';
   static String teamColorDeactivate(String groupId, String id) =>
       '/api/TeamColor/group/$groupId/$id/deactivate';
+
+  // Matches – workflow completo
+  static String matchCreate(String groupId)              => '/api/Matches/group/$groupId';
+  static String matchHeader(String groupId, String id)   => '/api/Matches/group/$groupId/$id/header';
+  static String matchAcceptation(String groupId, String id) => '/api/Matches/group/$groupId/$id/acceptation';
+  static String matchMatchmaking(String groupId, String id) => '/api/Matches/group/$groupId/$id/matchmaking';
+  static String matchPostgame(String groupId, String id)    => '/api/Matches/group/$groupId/$id/postgame';
+  static String matchAccept(String groupId, String id)   => '/api/Matches/group/$groupId/$id/accept';
+  static String matchReject(String groupId, String id)   => '/api/Matches/group/$groupId/$id/reject';
+  static String matchColors(String groupId, String id)   => '/api/Matches/group/$groupId/$id/colors';
+  static String matchStart(String groupId, String id)    => '/api/Matches/group/$groupId/$id/start';
+  static String matchEnd(String groupId, String id)      => '/api/Matches/group/$groupId/$id/end';
+  static String matchVote(String groupId, String id)     => '/api/Matches/group/$groupId/$id/vote';
+  static String matchScore(String groupId, String id)    => '/api/Matches/group/$groupId/$id/score';
+  static String matchGoals(String groupId, String id)    => '/api/Matches/group/$groupId/$id/goals';
+  static String matchGoalById(String groupId, String id, String goalId) =>
+      '/api/Matches/group/$groupId/$id/goals/$goalId';
+  static String matchTeams(String groupId, String id)    => '/api/Matches/group/$groupId/$id/teams';
+  static String matchSwap(String groupId, String id)     => '/api/Matches/group/$groupId/$id/swap';
+  static String matchFinalize(String groupId, String id) => '/api/Matches/group/$groupId/$id/finalize';
+  static String matchRewind(String groupId, String id)   => '/api/Matches/group/$groupId/$id/rewind';
+  static String matchGoToMatchmaking(String groupId, String id) =>
+      '/api/Matches/group/$groupId/$id/go-to-matchmaking';
+  static String matchGoToPostGame(String groupId, String id) =>
+      '/api/Matches/group/$groupId/$id/go-to-post-game';
+  static String matchGuest(String groupId, String id)    => '/api/Matches/group/$groupId/$id/guest';
+  static String matchPlayerRole(String groupId, String id, String mpId) =>
+      '/api/Matches/group/$groupId/$id/players/$mpId/role';
+
+  // TeamGeneration
+  static const String teamGenGenerate = '/api/TeamGeneration/generate';
 }

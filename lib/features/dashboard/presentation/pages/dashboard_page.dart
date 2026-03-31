@@ -58,9 +58,11 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   @override
   Widget build(BuildContext context) {
     final isDark      = Theme.of(context).brightness == Brightness.dark;
-    final account     = ref.watch(accountStoreProvider).activeAccount;
-    final groupId     = account?.activeGroupId ?? '';
+    final account      = ref.watch(accountStoreProvider).activeAccount;
     final activePlayer = ref.watch(activePlayerProvider);
+    // Fallback: usa o groupId do player ativo se activeGroupId ainda não foi
+    // persistido (race condition logo após login com múltiplos grupos)
+    final groupId      = account?.activeGroupId ?? activePlayer?.groupId ?? '';
 
     final currentMatchAsync = groupId.isNotEmpty
         ? ref.watch(currentMatchProvider(groupId))
@@ -130,7 +132,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                       onTap: () => _refreshRecent(groupId, activePlayer.playerId),
                     )
                   : null,
-              child: _buildRecentContent(context, isDark, activePlayer, recentAsync),
+              child: _buildRecentContent(context, isDark, activePlayer, recentAsync, groupId),
             ),
             const SizedBox(height: 16),
 
@@ -274,7 +276,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
 
   // ── Últimas partidas — conteúdo ─────────────────────────────────────────────
   Widget _buildRecentContent(
-      BuildContext context, bool isDark, dynamic activePlayer, AsyncValue? async) {
+      BuildContext context, bool isDark, dynamic activePlayer, AsyncValue? async, String groupId) {
     if (activePlayer == null) {
       return _CenteredMsg(
           msg: 'Selecione um jogador para ver suas últimas partidas.',
@@ -301,7 +303,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             for (int i = 0; i < matches.length; i++) ...[
               RecentMatchCard(
                 match:   matches[i],
-                groupId: ref.read(accountStoreProvider).activeAccount?.activeGroupId ?? '',
+                groupId: groupId,
               ),
               if (i < matches.length - 1) const SizedBox(height: 10),
             ],

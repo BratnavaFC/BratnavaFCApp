@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../auth/presentation/providers/account_store.dart';
+import '../../../dashboard/presentation/providers/dashboard_provider.dart';
 import '../../data/datasources/calendar_remote_datasource.dart';
 import '../../domain/entities/calendar_event.dart';
 import '../providers/calendar_provider.dart';
@@ -235,9 +236,18 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark  = Theme.of(context).brightness == Brightness.dark;
+    final isDark       = Theme.of(context).brightness == Brightness.dark;
+    final account      = ref.watch(accountStoreProvider).activeAccount;
+    final activePlayer = ref.watch(activePlayerProvider);
+    final resolvedId   = account?.activeGroupId ?? activePlayer?.groupId ?? '';
 
-    if (_groupId.isEmpty) {
+    // Quando o grupo é resolvido após o login (race condition),
+    // dispara o carregamento de eventos se ainda não carregou.
+    if (resolvedId.isNotEmpty && _events.isEmpty && !_loading) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _fetchEvents());
+    }
+
+    if (resolvedId.isEmpty) {
       return Scaffold(
         body: Center(
           child: Column(

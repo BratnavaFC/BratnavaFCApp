@@ -133,4 +133,13 @@ class ApiConstants {
       '/api/TeamColor/group/$groupId/$id/activate';
   static String teamColorDeactivate(String groupId, String id) =>
       '/api/TeamColor/group/$groupId/$id/deactivate';
+
+  // Push Notifications
+  static const String pushRegisterToken = '/api/push/register-token';
+
+  // Match invite — aceitar/rejeitar pelo token JWT (sem playerId)
+  static String matchMyInviteAccept(String groupId, String matchId) =>
+      '/api/matches/group/$groupId/$matchId/my-invite/accept';
+  static String matchMyInviteReject(String groupId, String matchId) =>
+      '/api/matches/group/$groupId/$matchId/my-invite/reject';
 }

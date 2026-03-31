@@ -27,6 +27,14 @@ class PaymentsRemoteDataSource {
     return null;
   }
 
+  /// Extrai o campo "message" da resposta de forma segura.
+  /// Suporta: Map { "message": "..." }, String direta, ou null.
+  String? _message(dynamic data) {
+    if (data is Map)    return data['message'] as String?;
+    if (data is String) return data.isNotEmpty ? data : null;
+    return null;
+  }
+
   // ── Mensalidades (admin) ──────────────────────────────────────────────────
 
   Future<MonthlyGrid> getMonthlyGrid(String groupId, int year) async {
@@ -36,7 +44,7 @@ class PaymentsRemoteDataSource {
 
   Future<String?> upsertMonthly(String groupId, Map<String, dynamic> dto) async {
     final res = await _dio.put(ApiConstants.upsertMonthly(groupId), data: dto);
-    return (res.data as Map?)?['message'] as String?;
+    return _message(res.data);
   }
 
   Future<Map<String, dynamic>?> getMonthlyProof(
@@ -68,20 +76,20 @@ class PaymentsRemoteDataSource {
       String groupId, Map<String, dynamic> dto) async {
     final res =
         await _dio.post(ApiConstants.extraCharges(groupId), data: dto);
-    return (res.data as Map?)?['message'] as String?;
+    return _message(res.data);
   }
 
   Future<String?> cancelExtraCharge(String groupId, String chargeId) async {
     final res =
         await _dio.delete(ApiConstants.extraChargeById(groupId, chargeId));
-    return (res.data as Map?)?['message'] as String?;
+    return _message(res.data);
   }
 
   Future<String?> bulkDiscountExtraCharge(
       String groupId, String chargeId, Map<String, dynamic> dto) async {
     final res = await _dio.post(
         ApiConstants.extraChargeBulkDiscount(groupId, chargeId), data: dto);
-    return (res.data as Map?)?['message'] as String?;
+    return _message(res.data);
   }
 
   Future<String?> upsertExtraChargePayment(
@@ -90,7 +98,7 @@ class PaymentsRemoteDataSource {
     final res = await _dio.put(
         ApiConstants.extraChargePayment(groupId, chargeId, playerId),
         data: dto);
-    return (res.data as Map?)?['message'] as String?;
+    return _message(res.data);
   }
 
   Future<Map<String, dynamic>?> getExtraChargeProof(

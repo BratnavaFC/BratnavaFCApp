@@ -253,37 +253,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 class _BrandHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Column(
-      children: [
-        Container(
-          width:  56,
-          height: 56,
-          decoration: BoxDecoration(
-            color:        isDark ? AppColors.slate800 : AppColors.slate900,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          alignment: Alignment.center,
-          child: const Text(
-            'BFC',
-            style: TextStyle(
-              color:      Colors.white,
-              fontWeight: FontWeight.w800,
-              fontSize:   18,
-              letterSpacing: 1,
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          'BratnavaFC',
-          style: Theme.of(context)
-              .textTheme
-              .titleMedium
-              ?.copyWith(fontWeight: FontWeight.w700),
-        ),
-      ],
+    return Image.asset(
+      'assets/images/logo.png',
+      width:  160,
+      height: 160,
     );
   }
 }

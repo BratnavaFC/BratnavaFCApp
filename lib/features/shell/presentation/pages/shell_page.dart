@@ -32,6 +32,10 @@ class _ShellPageState extends ConsumerState<ShellPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Atualiza roles no startup para refletir promoções feitas fora do app.
+    Future.microtask(
+      () => ref.read(authNotifierProvider.notifier).refreshRoles(),
+    );
   }
 
   @override
@@ -44,6 +48,8 @@ class _ShellPageState extends ConsumerState<ShellPage>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _checkTokenOnResume();
+      // Atualiza roles ao voltar para o app.
+      ref.read(authNotifierProvider.notifier).refreshRoles();
     }
   }
 

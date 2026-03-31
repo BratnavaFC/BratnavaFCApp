@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../auth/domain/entities/account.dart';
 import '../../../auth/presentation/providers/account_store.dart';
+import '../../../dashboard/presentation/providers/dashboard_provider.dart';
 import '../../data/datasources/group_settings_remote_datasource.dart';
 import '../../domain/entities/group_settings.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 import '../providers/group_settings_provider.dart';
 
 // ── Icon types ────────────────────────────────────────────────────────────────
@@ -144,16 +146,41 @@ const _kDayLabels = <String>[
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-class GroupSettingsPage extends ConsumerWidget {
+class GroupSettingsPage extends ConsumerStatefulWidget {
   const GroupSettingsPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final account = ref.watch(accountStoreProvider).activeAccount;
-    final groupId = account?.activeGroupId;
+  ConsumerState<GroupSettingsPage> createState() => _GroupSettingsPageWrapperState();
+}
+
+class _GroupSettingsPageWrapperState extends ConsumerState<GroupSettingsPage> {
+  bool _refreshingRoles = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // Atualiza as permissões antes de verificar o acesso, para que admins
+    // recém-promovidos não vejam "Sem acesso" com dados desatualizados.
+    Future.microtask(() async {
+      await ref.read(authNotifierProvider.notifier).refreshRoles();
+      if (mounted) setState(() => _refreshingRoles = false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final account      = ref.watch(accountStoreProvider).activeAccount;
+    final activePlayer = ref.watch(activePlayerProvider);
+    final groupId      = account?.activeGroupId ?? activePlayer?.groupId;
 
     if (groupId == null || groupId.isEmpty) {
       return const Scaffold(body: _NoGroupState());
+    }
+
+    // Enquanto atualiza as roles, exibe loading para não bloquear admins
+    // recém-promovidos com "Sem acesso" antes das permissões serem carregadas.
+    if (_refreshingRoles) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     final isGroupAdm = account!.isAdmin || account.isGroupAdmin(groupId);
@@ -375,6 +402,8 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
         await ds.removeFinanceiro(widget.groupId, member.userId);
       }
       ref.invalidate(groupDetailProvider(widget.groupId));
+      // Atualiza as permissões locais ao remover admin/financeiro.
+      ref.read(authNotifierProvider.notifier).refreshRoles();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Membro removido com sucesso.')),
@@ -407,6 +436,9 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
         ds:            ref.read(groupSettingsDsProvider),
         onAdded: () {
           ref.invalidate(groupDetailProvider(widget.groupId));
+          // Atualiza as permissões locais imediatamente para quem foi promovido
+          // ver os botões de admin/financeiro sem precisar fazer logout.
+          ref.read(authNotifierProvider.notifier).refreshRoles();
         },
       ),
     );

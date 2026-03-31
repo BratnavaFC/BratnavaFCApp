@@ -198,6 +198,8 @@ class GroupSettings {
     this.isPersisted       = false,
   });
 
+  factory GroupSettings.defaults() => const GroupSettings();
+
   factory GroupSettings.fromJson(Map<String, dynamic> json) {
     final Map<String, dynamic> j =
         (json['data'] is Map<String, dynamic>)

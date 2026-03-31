@@ -162,6 +162,15 @@ class ApiConstants {
   static String matchPlayerRole(String groupId, String id, String mpId) =>
       '/api/Matches/group/$groupId/$id/players/$mpId/role';
 
+  // Match invite — aceitar/rejeitar pelo token JWT (sem playerId)
+  static String matchMyInviteAccept(String groupId, String matchId) =>
+      '/api/matches/group/$groupId/$matchId/my-invite/accept';
+  static String matchMyInviteReject(String groupId, String matchId) =>
+      '/api/matches/group/$groupId/$matchId/my-invite/reject';
+
   // TeamGeneration
   static const String teamGenGenerate = '/api/TeamGeneration/generate';
+
+  // Push Notifications
+  static const String pushRegisterToken = '/api/push/register-token';
 }

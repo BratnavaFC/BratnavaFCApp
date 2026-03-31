@@ -18,6 +18,7 @@ import '../../features/visual_stats/presentation/pages/visual_stats_page.dart';
 import '../../features/polls/presentation/pages/polls_page.dart';
 import '../../features/matches/presentation/pages/matches_page.dart';
 import '../../features/payments/presentation/pages/payments_page.dart';
+import '../../core/push/local_notifications.dart';
 
 // ── Placeholder para rotas ainda não implementadas ────────────────────────────
 class _PlaceholderPage extends StatelessWidget {
@@ -37,12 +38,56 @@ class _PlaceholderPage extends StatelessWidget {
       );
 }
 
+// ── Página temporária de Partidas com botão de teste de push ─────────────────
+class _MatchesTestPage extends StatelessWidget {
+  const _MatchesTestPage();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Partidas')),
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Partidas\nem desenvolvimento',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 40),
+            // ── BOTÃO TEMPORÁRIO DE TESTE ───────────────────────────────────
+            OutlinedButton.icon(
+              icon: const Icon(Icons.notifications_active_outlined),
+              label: const Text('Simular convite de partida'),
+              onPressed: () => LocalNotifications.showMatchInvite(
+                title:   'Convite para partida',
+                body:    'Você foi convidado para uma partida. Confirme sua presença!',
+                groupId: '00000000-0000-0000-0000-000000000001', // placeholder
+                matchId: '00000000-0000-0000-0000-000000000002', // placeholder
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── NavigatorKey global (compartilhado com PushService) ──────────────────────
+
+final navigatorKeyProvider = Provider<GlobalKey<NavigatorState>>(
+  (_) => GlobalKey<NavigatorState>(),
+);
+
 // ── Router Provider ───────────────────────────────────────────────────────────
 
 final routerProvider = Provider<GoRouter>((ref) {
+  final navigatorKey   = ref.watch(navigatorKeyProvider);
   final authListenable = _AccountStateListenable(ref);
 
   return GoRouter(
+    navigatorKey:      navigatorKey,
     refreshListenable: authListenable,
     initialLocation:   '/login',
     redirect: (context, state) {

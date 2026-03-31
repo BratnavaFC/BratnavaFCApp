@@ -113,6 +113,26 @@ class AuthNotifier extends AsyncNotifier<void> {
     ref.invalidateSelf();
   }
 
+  /// Re-busca os groupAdminIds e groupFinanceiroIds da conta ativa.
+  /// Chamado no startup e no resume para refletir mudanças de role feitas
+  /// enquanto o usuário estava fora (ex: foi promovido a admin).
+  Future<void> refreshRoles() async {
+    final account = ref.read(accountStoreProvider).activeAccount;
+    if (account == null) return;
+    try {
+      final dataSource = ref.read(_authDataSourceProvider);
+      final roles = await dataSource.fetchGroupRoles(account.userId);
+      await ref.read(accountStoreProvider.notifier).upsertAccount(
+        account.copyWith(
+          groupAdminIds:      roles['adminIds'],
+          groupFinanceiroIds: roles['financeiroIds'],
+        ),
+      );
+    } catch (_) {
+      // Silencioso — permissões desatualizadas são melhor que crash
+    }
+  }
+
   /// Tenta renovar o token proativamente antes de expirar.
   /// Delega ao AuthInterceptor para reutilizar a lógica de envelope e mutex.
   Future<void> proactiveRefresh() async {

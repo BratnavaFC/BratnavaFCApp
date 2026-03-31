@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../auth/presentation/providers/account_store.dart';
+import '../../../dashboard/presentation/providers/dashboard_provider.dart';
 import '../../domain/entities/history_match.dart';
 import '../providers/history_provider.dart';
 
@@ -39,7 +40,9 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
 
   @override
   Widget build(BuildContext context) {
-    final groupId    = ref.watch(accountStoreProvider).activeAccount?.activeGroupId;
+    final account     = ref.watch(accountStoreProvider).activeAccount;
+    final activePlayer = ref.watch(activePlayerProvider);
+    final groupId    = account?.activeGroupId ?? activePlayer?.groupId;
     final isDark     = Theme.of(context).brightness == Brightness.dark;
 
     return RefreshIndicator(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../auth/presentation/providers/account_store.dart';
+import '../../../dashboard/presentation/providers/dashboard_provider.dart';
 import '../../../group_settings/presentation/providers/group_settings_provider.dart';
 import '../../data/datasources/payments_remote_datasource.dart';
 import '../../domain/entities/payment_entities.dart';
@@ -32,12 +33,19 @@ class _PaymentsPageState extends ConsumerState<PaymentsPage>
   int  _paymentMode = 0;   // 0=Monthly, 1=PerGame
   bool _loadingMode = true;
 
-  String?  get _groupId  => ref.read(accountStoreProvider).activeAccount?.activeGroupId;
+  String? get _groupId {
+    final acc = ref.read(accountStoreProvider).activeAccount;
+    if (acc?.activeGroupId != null) return acc!.activeGroupId;
+    return ref.read(activePlayerProvider)?.groupId;
+  }
+
+  // Somente financeiro enxerga as pendências da patota inteira.
+  // Admin vê apenas as próprias pendências, igual aos demais jogadores.
   bool get _isPaymentAdmin {
     final acc = ref.read(accountStoreProvider).activeAccount;
     final gid = _groupId;
     if (acc == null || gid == null) return false;
-    return acc.isGroupAdmin(gid) || acc.isGroupFinanceiro(gid);
+    return acc.isGroupFinanceiro(gid);
   }
 
   PaymentsRemoteDataSource get _ds => ref.read(paymentsDsProvider);
@@ -205,8 +213,22 @@ class _PaymentsPageState extends ConsumerState<PaymentsPage>
   @override
   Widget build(BuildContext context) {
     final isDark  = Theme.of(context).brightness == Brightness.dark;
-    final groupId = _groupId ?? '';
-    final isAdmin = _isPaymentAdmin;
+    // ref.watch — reconstrói automaticamente quando activeGroupId muda
+    // (ex.: AppTopBar auto-seleciona o grupo logo após o login)
+    final account      = ref.watch(accountStoreProvider).activeAccount;
+    final activePlayer = ref.watch(activePlayerProvider);
+    // Fallback: usa o groupId do player ativo se activeGroupId ainda não foi
+    // persistido (race condition logo após login com múltiplos grupos)
+    final groupId      = account?.activeGroupId ?? activePlayer?.groupId ?? '';
+    final isAdmin      = account != null && groupId.isNotEmpty
+        ? account.isGroupFinanceiro(groupId)
+        : false;
+
+    // Se o groupId acabou de ser resolvido e o paymentMode ainda não foi carregado,
+    // dispara o carregamento agora (cobre o caso de login com múltiplos grupos).
+    if (groupId.isNotEmpty && _loadingMode) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadPaymentMode());
+    }
 
     if (groupId.isEmpty) {
       return Scaffold(

@@ -250,6 +250,9 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
   late int _mvpTieMaxPlayers;
   late final TextEditingController _mvpMaxCtrl;
 
+  // ── Show player stats toggle ──────────────────────────────────────────────
+  bool _showPlayerStats = false;
+
   // ── Save state ────────────────────────────────────────────────────────────
   bool    _saving     = false;
   bool    _isPersisted = false;
@@ -285,6 +288,7 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
     _mvpTieRule       = s.mvpTieRule;
     _mvpTieMaxPlayers = s.mvpTieMaxPlayers;
     _mvpMaxCtrl       = TextEditingController(text: s.mvpTieMaxPlayers.toString());
+    _showPlayerStats  = s.showPlayerStats;
   }
 
   @override
@@ -336,6 +340,7 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
         playerIcon:         _icons['playerIcon'],
         mvpTieRule:         _mvpTieRule,
         mvpTieMaxPlayers:   _mvpTieRule == 2 ? _mvpTieMaxPlayers : null,
+        showPlayerStats:    _showPlayerStats,
       );
       ref.invalidate(groupSettingsProvider(widget.groupId));
       if (mounted) {
@@ -688,6 +693,68 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
         title:    'Empate no MVP',
         subtitle: 'O que acontece quando dois ou mais jogadores empatam em votos',
         child: _buildMvpTieRule(isDark),
+      ),
+
+      const SizedBox(height: 12),
+
+      // ── Exibir gols e assistências ────────────────────────────────────────
+      Container(
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.slate900 : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+              color: isDark ? AppColors.slate700 : AppColors.slate200),
+        ),
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: isDark
+                    ? AppColors.slate700
+                    : const Color(0xFFEFF6FF),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                Icons.bar_chart_rounded,
+                size: 18,
+                color: isDark ? AppColors.slate300 : const Color(0xFF2563EB),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Exibir gols e assistências',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? AppColors.slate100 : AppColors.slate900,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Jogadores comuns poderão ver gols e assistências. Administradores sempre visualizam.',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark ? AppColors.slate400 : AppColors.slate500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Switch(
+              value: _showPlayerStats,
+              onChanged: (v) => setState(() => _showPlayerStats = v),
+              activeThumbColor: isDark ? AppColors.slate100 : AppColors.slate900,
+            ),
+          ],
+        ),
       ),
 
       const SizedBox(height: 20),

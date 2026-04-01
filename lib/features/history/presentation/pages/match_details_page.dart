@@ -38,6 +38,7 @@ class _MatchDetailsPageState extends ConsumerState<MatchDetailsPage> {
     ));
     final settings  = ref.watch(groupSettingsProvider(widget.groupId)).valueOrNull;
     final icons     = GroupIcons.from(settings);
+    final canSeeGoals = isAdmin || (settings?.showPlayerStats ?? false);
 
     return async.when(
       loading: () => _LoadingSkeleton(isDark: isDark),
@@ -73,6 +74,7 @@ class _MatchDetailsPageState extends ConsumerState<MatchDetailsPage> {
         isAdmin:       isAdmin,
         goalsTab:      _goalsTab,
         icons:         icons,
+        canSeeGoals:   canSeeGoals,
         onGoalsTab:    (t) => setState(() => _goalsTab = t),
         onBack:        () => context.go('/app/history'),
       ),
@@ -86,6 +88,7 @@ class _DetailsBody extends StatelessWidget {
   final MatchDetails data;
   final bool         isDark;
   final bool         isAdmin;
+  final bool         canSeeGoals;
   final int          goalsTab;
   final void Function(int) onGoalsTab;
   final VoidCallback onBack;
@@ -95,6 +98,7 @@ class _DetailsBody extends StatelessWidget {
     required this.data,
     required this.isDark,
     required this.isAdmin,
+    required this.canSeeGoals,
     required this.goalsTab,
     required this.onGoalsTab,
     required this.onBack,
@@ -206,21 +210,24 @@ class _DetailsBody extends StatelessWidget {
               const SizedBox(height: 12),
 
               // Goals section
-              _SectionHeader(
-                title: 'Gols (${goals.length})',
-                isDark: isDark,
-              ),
-              _GoalsSection(
-                goals:     goals,
-                tab:       goalsTab,
-                onTab:     onGoalsTab,
-                aColor:    aColor,
-                bColor:    bColor,
-                aName:     aName,
-                bName:     bName,
-                isDark:    isDark,
-                icons:     icons,
-              ),
+              if (canSeeGoals) ...[
+                _SectionHeader(
+                  title: 'Gols (${goals.length})',
+                  isDark: isDark,
+                ),
+                _GoalsSection(
+                  goals:     goals,
+                  tab:       goalsTab,
+                  onTab:     onGoalsTab,
+                  aColor:    aColor,
+                  bColor:    bColor,
+                  aName:     aName,
+                  bName:     bName,
+                  isDark:    isDark,
+                  icons:     icons,
+                ),
+                const SizedBox(height: 12),
+              ],
 
               // MVP section (only when match has MVP data)
               if (data.computedMvp?.playerName != null) ...[

@@ -178,6 +178,7 @@ class GroupSettings {
 
   // Meta
   final bool isPersisted; // false = using defaults, prompt user to save
+  final bool showPlayerStats; // true = regular players can see goals/assists
 
   const GroupSettings({
     this.minPlayers        = 5,
@@ -196,6 +197,7 @@ class GroupSettings {
     this.mvpTieRule        = 1,
     this.mvpTieMaxPlayers  = 2,
     this.isPersisted       = false,
+    this.showPlayerStats   = false,
   });
 
   factory GroupSettings.defaults() => const GroupSettings();
@@ -223,6 +225,7 @@ class GroupSettings {
       mvpTieRule:         (j['mvpTieRule']        as int?) ?? 1,
       mvpTieMaxPlayers:   (j['mvpTieMaxPlayers']  as int?) ?? 2,
       isPersisted:        (j['isPersisted'] as bool?)   ?? false,
+      showPlayerStats:    (j['showPlayerStats'] as bool?) ?? false,
     );
   }
 
@@ -243,6 +246,7 @@ class GroupSettings {
     required String? playerIcon,
     required int     mvpTieRule,
     int?             mvpTieMaxPlayers,
+    required bool    showPlayerStats,
   }) =>
       {
         'minPlayers':         minPlayers,
@@ -262,5 +266,6 @@ class GroupSettings {
         'mvpTieRule':         mvpTieRule,
         // mvpTieMaxPlayers only sent when rule == 2 (mirrors site behaviour)
         'mvpTieMaxPlayers': mvpTieRule == 2 ? mvpTieMaxPlayers : null,
+        'showPlayerStats': showPlayerStats,
       };
 }

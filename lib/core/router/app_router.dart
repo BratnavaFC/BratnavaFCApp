@@ -17,6 +17,7 @@ import '../../features/shell/presentation/pages/shell_page.dart';
 import '../../features/visual_stats/presentation/pages/visual_stats_page.dart';
 import '../../features/polls/presentation/pages/polls_page.dart';
 import '../../features/matches/presentation/pages/matches_page.dart';
+import '../../features/absences/presentation/pages/absences_page.dart';
 import '../../features/payments/presentation/pages/payments_page.dart';
 import '../../core/push/local_notifications.dart';
 
@@ -175,6 +176,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path:    '/app/admin/users',
             builder: (_, __) => const MembersPage(),
+          ),
+          GoRoute(
+            path:    '/app/absences',
+            builder: (_, __) => const AbsencesPage(),
           ),
         ],
       ),

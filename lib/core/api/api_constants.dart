@@ -171,6 +171,11 @@ class ApiConstants {
   // TeamGeneration
   static const String teamGenGenerate = '/api/TeamGeneration/generate';
 
+  // Absences
+  static const String absences     = '/api/absences';
+  static const String absencesMine = '/api/absences/mine';
+  static String absenceById(String id) => '/api/absences/$id';
+
   // Push Notifications
   static const String pushRegisterToken = '/api/push/register-token';
 }

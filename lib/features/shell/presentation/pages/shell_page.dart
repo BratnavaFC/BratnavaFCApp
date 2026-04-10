@@ -135,6 +135,7 @@ class _MoreSheet extends ConsumerWidget {
     (Icons.payments_outlined,        'Pagamentos',    '/app/payments',    false),
     (Icons.how_to_vote_outlined,     'Votações',      '/app/polls',       true),
     (Icons.cake_outlined,            'Aniversários',  '/app/birthdays',   false),
+    (Icons.event_busy_outlined,      'Ausências',     '/app/absences',    false),
     (Icons.settings_outlined,        'Configurações', '/app/settings',    false),
     (Icons.manage_accounts_outlined, 'Usuários',      '/app/admin/users', false),
   ];

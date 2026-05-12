@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../auth/presentation/providers/account_store.dart';
+import '../../../dashboard/presentation/providers/dashboard_provider.dart';
 import '../../data/datasources/match_remote_datasource.dart';
 import '../../domain/entities/match_models.dart';
 
@@ -121,7 +122,12 @@ class MatchNotifier extends StateNotifier<MatchState> {
     final header = await _ds.fetchHeader(groupId, matchId).catchError((_) => null);
     _applyHeader(header);
 
-    switch (step) {
+    // O /current stub nem sempre tem `status`, então `step` pode estar errado.
+    // Após _applyHeader, state.step reflete o stepKey real do backend.
+    // Usamos state.step para garantir que carregamos o payload correto.
+    final effectiveStep = state.step;
+
+    switch (effectiveStep) {
       case MatchStep.accept:
         final d = await _ds.fetchAcceptation(groupId, matchId).catchError((_) => null);
         _applyAcceptation(d);
@@ -594,8 +600,11 @@ class MatchNotifier extends StateNotifier<MatchState> {
 
 final matchNotifierProvider =
     StateNotifierProvider.autoDispose<MatchNotifier, MatchState>((ref) {
-  final acc     = ref.read(accountStoreProvider).activeAccount;
-  final groupId = acc?.activeGroupId ?? '';
-  final isAdmin = groupId.isNotEmpty && (acc?.isGroupAdmin(groupId) ?? false);
+  final acc    = ref.watch(accountStoreProvider.select((s) => s.activeAccount));
+  // Fallback: usa groupId do player ativo se activeGroupId ainda não está persistido.
+  final player = ref.watch(activePlayerProvider);
+  final groupId = acc?.activeGroupId ?? player?.groupId ?? '';
+  final isAdmin = (acc?.isAdmin ?? false) ||
+      (groupId.isNotEmpty && (acc?.isGroupAdmin(groupId) ?? false));
   return MatchNotifier(ref.read(matchDsProvider), groupId, isAdmin);
 });

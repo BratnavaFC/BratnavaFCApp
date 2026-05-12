@@ -3,10 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../auth/presentation/providers/account_store.dart';
-import '../../domain/entities/match_models.dart';
 import '../providers/match_provider.dart';
-import '../widgets/match_stepper_header.dart';
-import 'step6_pos_jogo_page.dart';
 
 class Step5EncerrarPage extends ConsumerWidget {
   const Step5EncerrarPage({super.key});
@@ -14,16 +11,11 @@ class Step5EncerrarPage extends ConsumerWidget {
   bool _isAdmin(WidgetRef ref) {
     final acc = ref.read(accountStoreProvider).activeAccount;
     final gid = acc?.activeGroupId ?? '';
-    return gid.isNotEmpty && (acc?.isGroupAdmin(gid) ?? false);
+    return (acc?.isAdmin ?? false) || (gid.isNotEmpty && (acc?.isGroupAdmin(gid) ?? false));
   }
 
   Future<void> _goPostGame(BuildContext context, WidgetRef ref) async {
-    final ok = await ref.read(matchNotifierProvider.notifier).goToPostGame();
-    if (ok && context.mounted) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const Step6PosJogoPage()),
-      );
-    }
+    await ref.read(matchNotifierProvider.notifier).goToPostGame();
   }
 
   @override
@@ -33,20 +25,9 @@ class Step5EncerrarPage extends ConsumerWidget {
     final fmt     = DateFormat('dd/MM/yyyy HH:mm', 'pt_BR');
     final dateStr = s.playedAt != null ? fmt.format(s.playedAt!.toLocal()) : '—';
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Encerrada'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => ref.read(matchNotifierProvider.notifier).refresh(),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          MatchStepperHeader(currentStep: MatchStep.ended),
-          Expanded(
+    return Column(
+      children: [
+        Expanded(
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -131,7 +112,6 @@ class Step5EncerrarPage extends ConsumerWidget {
               ),
             ),
         ],
-      ),
     );
   }
 }

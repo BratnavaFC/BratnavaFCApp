@@ -2,37 +2,56 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../domain/entities/match_models.dart';
 import '../providers/match_provider.dart';
-import '../widgets/match_stepper_header.dart';
 
-class Step7FinalPage extends ConsumerWidget {
+class Step7FinalPage extends ConsumerStatefulWidget {
   const Step7FinalPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<Step7FinalPage> createState() => _Step7FinalPageState();
+}
+
+class _Step7FinalPageState extends ConsumerState<Step7FinalPage> {
+  bool _reapplyingMvp = false;
+
+  Future<void> _reapplyMvp() async {
+    final s       = ref.read(matchNotifierProvider);
+    final matchId = s.matchId;
+    if (matchId == null || matchId.isEmpty) return;
+    final ds      = ref.read(matchDsProvider);
+    final notifier = ref.read(matchNotifierProvider.notifier);
+    setState(() => _reapplyingMvp = true);
+    try {
+      await ds.reapplyMvp(notifier.groupId, matchId);
+      await notifier.refresh();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('MVP recalculado com sucesso')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Não foi possível recalcular o MVP')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _reapplyingMvp = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final s       = ref.watch(matchNotifierProvider);
     final fmt     = DateFormat('dd/MM/yyyy HH:mm', 'pt_BR');
     final dateStr = s.playedAt != null ? fmt.format(s.playedAt!.toLocal()) : '—';
     final hasMvp  = s.computedMvps.isNotEmpty;
     final hasScore = s.teamAGoals != null && s.teamBGoals != null;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Finalizada'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Atualizar',
-            onPressed: () => ref.read(matchNotifierProvider.notifier).refresh(),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          MatchStepperHeader(currentStep: MatchStep.done),
-          Expanded(
-            child: SingleChildScrollView(
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -155,6 +174,32 @@ class Step7FinalPage extends ConsumerWidget {
                     ),
                   ),
 
+                  const SizedBox(height: 12),
+
+                  // ── Recalcular MVP ────────────────────────────────────
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _reapplyingMvp ? null : _reapplyMvp,
+                      icon: _reapplyingMvp
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.refresh_rounded, size: 18),
+                      label: const Text('Recalcular MVP'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.amber500,
+                        side: const BorderSide(color: AppColors.amber400),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ),
+
                   // ── Resultados por time ───────────────────────────────
                   if (hasScore && s.teamAColor != null) ...[
                     const SizedBox(height: 12),
@@ -194,7 +239,6 @@ class Step7FinalPage extends ConsumerWidget {
             ),
           ),
         ],
-      ),
     );
   }
 }

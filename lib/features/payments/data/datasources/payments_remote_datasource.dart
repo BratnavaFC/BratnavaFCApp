@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import '../../../../core/api/api_constants.dart';
@@ -12,6 +12,7 @@ class PaymentsRemoteDataSource {
 
   dynamic _unwrap(dynamic data) {
     if (data is Map && data.containsKey('data')) return data['data'];
+    if (data is Map && data.containsKey('Data')) return data['Data'];
     return data;
   }
 
@@ -124,6 +125,56 @@ class PaymentsRemoteDataSource {
     final d = _unwrapMap(res.data);
     if (d == null) return null;
     return PaymentSummary.fromJson(d);
+  }
+
+  // ── Iniciar mês ───────────────────────────────────────────────────────────
+
+  // Initiate monthly payment collection for a given month
+  // POST /api/groups/{groupId}/payments/monthly/{year}/{month}/initiate
+  Future<Map<String, dynamic>?> initiateMonth(String groupId, int year, int month) async {
+    final res = await _dio.post(ApiConstants.initiateMonth(groupId, year, month));
+    return _unwrapMap(res.data);
+  }
+
+  // Check if month has been initiated
+  // GET /api/groups/{groupId}/payments/monthly/{year}/{month}/is-initiated
+  Future<bool> isMonthInitiated(String groupId, int year, int month) async {
+    final res = await _dio.get(ApiConstants.isMonthInitiated(groupId, year, month));
+    final d = _unwrapMap(res.data);
+    return d?['isInitiated'] as bool? ?? false;
+  }
+
+  // Get pending payment items for current user
+  // GET /api/groups/{groupId}/payments/my-pending-items
+  Future<List<Map<String, dynamic>>> getMyPendingItems(String groupId) async {
+    final res = await _dio.get(ApiConstants.myPendingItems(groupId));
+    final d = _unwrap(res.data);
+    return (d is List ? d : []).cast<Map<String, dynamic>>();
+  }
+
+  // Pay selected items (batch)
+  // POST /api/groups/{groupId}/payments/pay-selected
+  Future<void> paySelected(String groupId, Map<String, dynamic> dto) async {
+    await _dio.post(ApiConstants.paySelected(groupId), data: dto);
+  }
+
+  // Get payment summary for a specific player (admin/financeiro)
+  // GET /api/groups/{groupId}/payments/summary/{playerId}
+  Future<PaymentSummary?> getPlayerSummary(String groupId, String playerId) async {
+    final res = await _dio.get(ApiConstants.paymentSummaryByPlayer(groupId, playerId));
+    final d = _unwrapMap(res.data);
+    if (d == null) return null;
+    return PaymentSummary.fromJson(d);
+  }
+
+  // ── Avaliação do jogador (estrelas) ──────────────────────────────────────
+
+  /// Salva a avaliação (1–5 estrelas) de um jogador via PUT /api/Players/{id}.
+  Future<void> updatePlayerRating(String playerId, int starRating) async {
+    await _dio.put(
+      ApiConstants.playerOps(playerId),
+      data: {'guestStarRating': starRating},
+    );
   }
 
   // ── Utilitário: converte arquivo para base64 ──────────────────────────────

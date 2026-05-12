@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/date_utils.dart';
 import '../../../auth/presentation/providers/account_store.dart';
 import '../../../dashboard/presentation/providers/dashboard_provider.dart';
 import '../../../group_settings/presentation/providers/group_settings_provider.dart';
@@ -106,11 +107,12 @@ class _PaymentsPageState extends ConsumerState<PaymentsPage>
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => MonthlyPaymentSheet(
-        row:      row,
-        month:    month,
-        isAdmin:  _isPaymentAdmin,
-        onSubmit: (dto) => _ds.upsertMonthly(gid, dto),
-        onSaved:  _refreshMonthly,
+        row:          row,
+        month:        month,
+        isAdmin:      _isPaymentAdmin,
+        onSubmit:     (dto) => _ds.upsertMonthly(gid, dto),
+        onSaveRating: (stars) => _ds.updatePlayerRating(row.playerId, stars),
+        onSaved:      _refreshMonthly,
       ),
     );
   }
@@ -394,7 +396,7 @@ class _MonthlyTab extends ConsumerWidget {
 
 // ── Admin: grade completa ─────────────────────────────────────────────────────
 
-class _AdminMonthlyView extends StatelessWidget {
+class _AdminMonthlyView extends StatefulWidget {
   final String  groupId;
   final int     year;
   final bool    isDark;
@@ -412,15 +414,25 @@ class _AdminMonthlyView extends StatelessWidget {
   });
 
   @override
+  State<_AdminMonthlyView> createState() => _AdminMonthlyViewState();
+}
+
+class _AdminMonthlyViewState extends State<_AdminMonthlyView> {
+
+  @override
   Widget build(BuildContext context) {
-    final gridAsync = ref.watch(
-        monthlyGridProvider((groupId: groupId, year: year)));
+    final gridAsync = widget.ref.watch(
+        monthlyGridProvider((groupId: widget.groupId, year: widget.year)));
+    final currentMonth = widget.year < DateTime.now().year
+        ? 12
+        : DateTime.now().month;
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         // Seletor de ano + mensalidade
         Row(children: [
-          _YearPicker(year: year, isDark: isDark, onChanged: onYearChanged),
+          _YearPicker(year: widget.year, isDark: widget.isDark, onChanged: widget.onYearChanged),
           const SizedBox(width: 12),
           gridAsync.maybeWhen(
             data: (grid) => grid.monthlyFee != null
@@ -428,7 +440,7 @@ class _AdminMonthlyView extends StatelessWidget {
                     'Mensalidade: R\$ ${grid.monthlyFee!.toStringAsFixed(2)}',
                     style: TextStyle(
                       fontSize: 13,
-                      color: isDark ? AppColors.slate400 : AppColors.slate500,
+                      color: widget.isDark ? AppColors.slate400 : AppColors.slate500,
                     ),
                   )
                 : Container(
@@ -453,24 +465,21 @@ class _AdminMonthlyView extends StatelessWidget {
             padding: EdgeInsets.all(40),
             child: CircularProgressIndicator(),
           )),
-          error: (e, _) => _ErrorState(e.toString(), isDark: isDark),
+          error: (e, _) => _ErrorState(e.toString(), isDark: widget.isDark),
           data: (grid) {
             if (grid.players.isEmpty) {
               return _EmptyState(
                 icon:  Icons.group_outlined,
                 title: 'Nenhum mensalista encontrado',
                 sub:   'Jogadores sem conta vinculada ou convidados não aparecem aqui.',
-                isDark: isDark,
+                isDark: widget.isDark,
               );
             }
-            final currentMonth = year < DateTime.now().year
-                ? 12
-                : DateTime.now().month;
             return _MonthlyGrid(
               grid:         grid,
               currentMonth: currentMonth,
-              isDark:       isDark,
-              onTap:        (row, month) => onOpenSheet(context, row, month),
+              isDark:       widget.isDark,
+              onTap:        (row, month) => widget.onOpenSheet(context, row, month),
             );
           },
         ),
@@ -1359,7 +1368,7 @@ class _ChargeCard extends StatelessWidget {
 
   String _fmtDate(String s) {
     try {
-      final d = DateTime.parse(s);
+      final d = AppDateUtils.parseOrNow(s);
       return '${d.day.toString().padLeft(2,'0')}/${d.month.toString().padLeft(2,'0')}/${d.year}';
     } catch (_) { return s; }
   }
@@ -1439,7 +1448,7 @@ class _PaymentRow extends StatelessWidget {
 
   String _fmtDate(String s) {
     try {
-      final d = DateTime.parse(s);
+      final d = AppDateUtils.parseOrNow(s);
       return '${d.day.toString().padLeft(2,'0')}/${d.month.toString().padLeft(2,'0')}/${d.year}';
     } catch (_) { return s; }
   }
@@ -1532,7 +1541,7 @@ class _UserChargeCard extends StatelessWidget {
 
   String _fmtDate(String s) {
     try {
-      final d = DateTime.parse(s);
+      final d = AppDateUtils.parseOrNow(s);
       return '${d.day.toString().padLeft(2,'0')}/${d.month.toString().padLeft(2,'0')}/${d.year}';
     } catch (_) { return s; }
   }

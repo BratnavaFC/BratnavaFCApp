@@ -1,3 +1,5 @@
+import '../../../../core/utils/date_utils.dart';
+
 // ── Mensalidades ──────────────────────────────────────────────────────────────
 
 class MonthlyCell {
@@ -39,11 +41,14 @@ class PlayerRow {
   final String         playerId;
   final String         playerName;
   final List<MonthlyCell> months;
+  /// 1–5 star evaluation (guestStarRating field from the player record).
+  final int?           starRating;
 
   const PlayerRow({
     required this.playerId,
     required this.playerName,
     required this.months,
+    this.starRating,
   });
 
   factory PlayerRow.fromJson(Map<String, dynamic> j) => PlayerRow(
@@ -52,6 +57,7 @@ class PlayerRow {
     months: (j['months'] as List? ?? [])
         .map((e) => MonthlyCell.fromJson(e as Map<String, dynamic>))
         .toList(),
+    starRating: j['guestStarRating'] as int? ?? j['starRating'] as int?,
   );
 }
 
@@ -143,8 +149,8 @@ class ExtraCharge {
   bool get isFinalized =>
       !isCancelled && payments.isNotEmpty && payments.every((p) => p.isPaid);
 
-  int get year  => DateTime.parse(createdAt).year;
-  int get month => DateTime.parse(createdAt).month;
+  int get year  => AppDateUtils.parseOrNow(createdAt).year;
+  int get month => AppDateUtils.parseOrNow(createdAt).month;
 
   factory ExtraCharge.fromJson(Map<String, dynamic> j) => ExtraCharge(
     id:          j['id']          as String,
@@ -176,9 +182,9 @@ class PaymentSummary {
   });
 
   factory PaymentSummary.fromJson(Map<String, dynamic> j) => PaymentSummary(
-    pendingMonthlyCount: j['pendingMonthlyCount'] as int? ?? 0,
-    pendingExtraCount:   j['pendingExtraCount']   as int? ?? 0,
-    totalPendingAmount:  (j['totalPendingAmount'] as num? ?? 0).toDouble(),
-    paymentMode:         j['paymentMode']         as int? ?? 0,
+    pendingMonthlyCount: (j['pendingMonthlyCount'] ?? j['PendingMonthlyCount']) as int? ?? 0,
+    pendingExtraCount:   (j['pendingExtraCount']   ?? j['PendingExtraCount'])   as int? ?? 0,
+    totalPendingAmount:  ((j['totalPendingAmount'] ?? j['TotalPendingAmount'])  as num? ?? 0).toDouble(),
+    paymentMode:         (j['paymentMode']         ?? j['PaymentMode'])         as int? ?? 0,
   );
 }

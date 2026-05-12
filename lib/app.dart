@@ -26,7 +26,12 @@ class _AppState extends ConsumerState<App> {
     final isLoggedIn = ref.read(accountStoreProvider).isLoggedIn;
     if (isLoggedIn && !_pushInitialized) {
       _pushInitialized = true;
-      ref.read(pushServiceProvider).initialize();
+      // Delay to let the current frame/navigation complete before FCM's
+      // platform-channel calls (requestPermission + getToken) hit the
+      // Android main thread — avoids visible UI freeze on login.
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) ref.read(pushServiceProvider).initialize();
+      });
     }
   }
 
@@ -39,7 +44,9 @@ class _AppState extends ConsumerState<App> {
       final wasLoggedIn = previous?.isLoggedIn ?? false;
       if (!wasLoggedIn && next.isLoggedIn && !_pushInitialized) {
         _pushInitialized = true;
-        ref.read(pushServiceProvider).initialize();
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted) ref.read(pushServiceProvider).initialize();
+        });
       }
     });
 

@@ -6,6 +6,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../auth/presentation/providers/account_store.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../widgets/app_top_bar.dart';
+import '../../../dashboard/presentation/providers/dashboard_provider.dart';
 import '../../../polls/presentation/providers/polls_provider.dart';
 
 class ShellPage extends ConsumerStatefulWidget {
@@ -49,7 +50,9 @@ class _ShellPageState extends ConsumerState<ShellPage>
     if (state == AppLifecycleState.resumed) {
       _checkTokenOnResume();
       // Atualiza roles ao voltar para o app.
-      ref.read(authNotifierProvider.notifier).refreshRoles();
+      Future.microtask(
+        () => ref.read(authNotifierProvider.notifier).refreshRoles(),
+      );
     }
   }
 
@@ -128,23 +131,44 @@ class _TabItem {
 class _MoreSheet extends ConsumerWidget {
   const _MoreSheet();
 
+  // (icon, label, path, hasBadge, adminOnly)
   static const _items = [
-    (Icons.calendar_month_outlined,  'Calendário',    '/app/calendar',    false),
-    (Icons.palette_outlined,         'Cores',         '/app/team-colors', false),
-    (Icons.bar_chart_outlined,       'Visual Stats',  '/app/visual-stats',false),
-    (Icons.payments_outlined,        'Pagamentos',    '/app/payments',    false),
-    (Icons.how_to_vote_outlined,     'Votações',      '/app/polls',       true),
-    (Icons.cake_outlined,            'Aniversários',  '/app/birthdays',   false),
-    (Icons.settings_outlined,        'Configurações', '/app/settings',    false),
-    (Icons.manage_accounts_outlined, 'Usuários',      '/app/admin/users', false),
+    (Icons.calendar_month_outlined,  'Calendário',            '/app/calendar',       false, false),
+    (Icons.palette_outlined,         'Cores',                 '/app/team-colors',    false, false),
+    (Icons.bar_chart_outlined,       'Visual Stats',          '/app/visual-stats',   false, true),
+    (Icons.timeline_outlined,        'Histórico do Jogador',  '/app/player-history', false, true),
+    (Icons.payments_outlined,        'Pagamentos',            '/app/payments',       false, false),
+    (Icons.how_to_vote_outlined,     'Votações',              '/app/polls',          true,  false),
+    (Icons.event_busy_outlined,      'Ausências',             '/app/absences',       false, false),
+    (Icons.monetization_on_outlined,  'Bet',                   '/app/bet',            false, false),
+    (Icons.video_library_outlined,   'Replays',               '/app/replays',        false, true),
+    (Icons.cake_outlined,            'Aniversários',          '/app/birthdays',      false, true),
+    (Icons.settings_outlined,        'Configurações',         '/app/settings',       false, true),
+    (Icons.manage_accounts_outlined, 'Usuários',              '/app/admin/users',    false, false),
   ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final groupId = ref.watch(accountStoreProvider).activeAccount?.activeGroupId;
+    final account      = ref.watch(accountStoreProvider).activeAccount;
+    final activePlayer = ref.watch(activePlayerProvider);
+    final groupId      = account?.activeGroupId ?? activePlayer?.groupId;
+
+    final isAdmin = (account?.isAdmin ?? false) ||
+        (groupId != null &&
+            groupId.isNotEmpty &&
+            (account?.isGroupAdmin(groupId) ?? false));
+
     final pendingCount = groupId != null
         ? ref.watch(pendingPollsCountProvider(groupId)).valueOrNull ?? 0
         : 0;
+
+    final isGodMode = account?.roles.any(
+          (r) => r.toLowerCase() == 'godmode',
+        ) ??
+        false;
+
+    // Filter out admin-only items for regular players
+    final visibleItems = _items.where((item) => !item.$5 || isAdmin).toList();
 
     return SafeArea(
       child: SingleChildScrollView(
@@ -161,7 +185,7 @@ class _MoreSheet extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 16),
-            ..._items.map(
+            ...visibleItems.map(
               (item) => ListTile(
                 leading: item.$4 && pendingCount > 0
                     ? Stack(
@@ -192,6 +216,15 @@ class _MoreSheet extends ConsumerWidget {
                 },
               ),
             ),
+            if (isGodMode)
+              ListTile(
+                leading: const Icon(Icons.admin_panel_settings_outlined, size: 22, color: Colors.deepPurple),
+                title: const Text('God Mode', style: TextStyle(fontSize: 14, color: Colors.deepPurple, fontWeight: FontWeight.w600)),
+                onTap: () {
+                  Navigator.pop(context);
+                  context.go('/app/admin/godmode');
+                },
+              ),
             const SizedBox(height: 8),
           ],
         ),

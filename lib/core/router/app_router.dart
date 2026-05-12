@@ -18,6 +18,13 @@ import '../../features/visual_stats/presentation/pages/visual_stats_page.dart';
 import '../../features/polls/presentation/pages/polls_page.dart';
 import '../../features/matches/presentation/pages/matches_page.dart';
 import '../../features/payments/presentation/pages/payments_page.dart';
+import '../../features/absences/presentation/pages/absences_page.dart';
+import '../../features/bet/presentation/pages/bet_page.dart';
+import '../../features/replays/presentation/pages/replay_vault_page.dart';
+import '../../features/player_spotlight/presentation/pages/player_spotlight_page.dart';
+import '../../features/player_history/presentation/pages/player_history_page.dart';
+import '../../features/god_mode/presentation/pages/god_mode_page.dart';
+import '../../features/groups/presentation/pages/group_invites_page.dart';
 import '../../core/push/local_notifications.dart';
 
 // ── Placeholder para rotas ainda não implementadas ────────────────────────────
@@ -175,6 +182,34 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path:    '/app/admin/users',
             builder: (_, __) => const MembersPage(),
+          ),
+          GoRoute(
+            path:    '/app/absences',
+            builder: (_, __) => const AbsencesPage(),
+          ),
+          GoRoute(
+            path:    '/app/bet',
+            builder: (_, __) => const BetPage(),
+          ),
+          GoRoute(
+            path:    '/app/replays',
+            builder: (_, __) => const ReplayVaultPage(),
+          ),
+          GoRoute(
+            path:    '/app/spotlight',
+            builder: (_, __) => const PlayerSpotlightPage(),
+          ),
+          GoRoute(
+            path:    '/app/player-history',
+            builder: (_, __) => const PlayerHistoryPage(),
+          ),
+          GoRoute(
+            path:    '/app/admin/godmode',
+            builder: (_, __) => const GodModePage(),
+          ),
+          GoRoute(
+            path:    '/app/invites',
+            builder: (_, __) => const GroupInvitesPage(),
           ),
         ],
       ),

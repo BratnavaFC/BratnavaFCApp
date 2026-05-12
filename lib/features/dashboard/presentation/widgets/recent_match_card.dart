@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/presentation/widgets/group_icon_renderer.dart';
+import '../../../auth/presentation/providers/account_store.dart';
 import '../../../group_settings/presentation/providers/group_settings_provider.dart';
 import '../../domain/entities/recent_match.dart';
 
@@ -41,6 +42,11 @@ class RecentMatchCard extends ConsumerWidget {
     // Ícones da patota (com fallback para defaults enquanto carrega)
     final settings = ref.watch(groupSettingsProvider(groupId)).valueOrNull;
     final icons    = GroupIcons.from(settings);
+
+    final account    = ref.watch(accountStoreProvider).activeAccount;
+    final isGroupAdm = account != null &&
+        (account.isAdmin || account.isGroupAdmin(groupId));
+    final canSeeStats = isGroupAdm || (settings?.showPlayerStats ?? false);
 
     return GestureDetector(
       onTap: () => context.push('/app/history/$groupId/${match.matchId}'),
@@ -181,7 +187,7 @@ class RecentMatchCard extends ConsumerWidget {
                             ),
 
                             // Gols
-                            if (match.goals > 0)
+                            if (canSeeStats && match.goals > 0)
                               Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
@@ -203,7 +209,7 @@ class RecentMatchCard extends ConsumerWidget {
                               ),
 
                             // Assistências
-                            if (match.assists > 0)
+                            if (canSeeStats && match.assists > 0)
                               Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [

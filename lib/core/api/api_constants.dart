@@ -224,6 +224,11 @@ class ApiConstants {
   static String pollDeadline(String groupId, String pollId) =>
       '/api/Polls/group/$groupId/$pollId/deadline';
 
+  // Absences
+  static const String absences     = '/api/absences';
+  static const String absencesMine = '/api/absences/mine';
+  static String absenceById(String id) => '/api/absences/$id';
+
   // Push Notifications
   static const String pushRegisterToken = '/api/push/register-token';
 

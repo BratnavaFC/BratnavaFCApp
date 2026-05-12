@@ -3,6 +3,26 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/presentation/widgets/avatar_widget.dart';
 import '../../domain/entities/match_models.dart';
 
+// ── Helpers de ausência (espelha absenceIcons.ts) ─────────────────────────────
+
+IconData _absenceIcon(int type) {
+  switch (type) {
+    case 1:  return Icons.flight_outlined;
+    case 2:  return Icons.local_hospital_outlined;
+    case 3:  return Icons.favorite_border;
+    default: return Icons.more_horiz_outlined;
+  }
+}
+
+String _absenceLabel(int type) {
+  switch (type) {
+    case 1:  return 'Viagem';
+    case 2:  return 'Departamento Médico';
+    case 3:  return 'Pessoal';
+    default: return 'Outros';
+  }
+}
+
 /// Tile de jogador reutilizável em Aceitação e MatchMaking.
 class PlayerListTile extends StatelessWidget {
   final MatchPlayerInfo player;
@@ -54,6 +74,20 @@ class PlayerListTile extends StatelessWidget {
             if (player.isGoalkeeper) ...[
               const SizedBox(width: 6),
               const Icon(Icons.sports_soccer, size: 14, color: AppColors.slate400),
+            ],
+            if (player.inviteResponse == InviteResponse.declined &&
+                player.absenceType != null) ...[
+              const SizedBox(width: 6),
+              Tooltip(
+                message: player.absenceDescription ?? _absenceLabel(player.absenceType!),
+                child: Icon(
+                  _absenceIcon(player.absenceType!),
+                  size: 14,
+                  color: player.absenceType == 2
+                      ? AppColors.rose500
+                      : AppColors.slate400,
+                ),
+              ),
             ],
             if (player.isGuest) ...[
               const SizedBox(width: 6),

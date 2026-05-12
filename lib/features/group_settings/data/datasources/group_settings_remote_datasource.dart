@@ -31,6 +31,7 @@ class GroupSettingsRemoteDataSource {
     required String? playerIcon,
     required int     mvpTieRule,
     int?             mvpTieMaxPlayers,
+    required bool    showPlayerStats,
   }) async {
     final body = const GroupSettings().toJson(
       minPlayers:         minPlayers,
@@ -48,6 +49,7 @@ class GroupSettingsRemoteDataSource {
       playerIcon:         playerIcon,
       mvpTieRule:         mvpTieRule,
       mvpTieMaxPlayers:   mvpTieMaxPlayers,
+      showPlayerStats:    showPlayerStats,
     );
     await _dio.put(ApiConstants.groupSettings(groupId), data: body);
   }

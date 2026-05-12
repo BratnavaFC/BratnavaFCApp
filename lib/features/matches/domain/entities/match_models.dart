@@ -86,6 +86,10 @@ class MatchPlayerInfo {
   final int team; // 0=não atribuído, 1=timeA, 2=timeB
   final InviteResponse inviteResponse;
 
+  /// Ausência ativa no momento da partida (null = sem ausência).
+  final int?    absenceType;
+  final String? absenceDescription;
+
   const MatchPlayerInfo({
     required this.matchPlayerId,
     required this.playerId,
@@ -94,6 +98,8 @@ class MatchPlayerInfo {
     required this.isGuest,
     required this.team,
     required this.inviteResponse,
+    this.absenceType,
+    this.absenceDescription,
   });
 
   static InviteResponse _parseInvite(dynamic v) {
@@ -104,13 +110,15 @@ class MatchPlayerInfo {
   }
 
   factory MatchPlayerInfo.fromJson(Map<String, dynamic> j) => MatchPlayerInfo(
-    matchPlayerId: (j['matchPlayerId'] ?? j['MatchPlayerId'] ?? '').toString(),
-    playerId:      (j['playerId']      ?? j['PlayerId']      ?? '').toString(),
-    playerName:    j['playerName']   as String? ?? j['PlayerName']   as String? ?? '',
-    isGoalkeeper:  j['isGoalkeeper'] as bool?   ?? j['IsGoalkeeper'] as bool?   ?? false,
-    isGuest:       j['isGuest']      as bool?   ?? j['IsGuest']      as bool?   ?? false,
-    team:          j['team']         as int?    ?? j['Team']         as int?    ?? 0,
-    inviteResponse: _parseInvite(j['inviteResponse'] ?? j['InviteResponse']),
+    matchPlayerId:      (j['matchPlayerId']      ?? j['MatchPlayerId']      ?? '').toString(),
+    playerId:           (j['playerId']           ?? j['PlayerId']           ?? '').toString(),
+    playerName:         j['playerName']          as String? ?? j['PlayerName']          as String? ?? '',
+    isGoalkeeper:       j['isGoalkeeper']        as bool?   ?? j['IsGoalkeeper']        as bool?   ?? false,
+    isGuest:            j['isGuest']             as bool?   ?? j['IsGuest']             as bool?   ?? false,
+    team:               j['team']                as int?    ?? j['Team']                as int?    ?? 0,
+    inviteResponse:     _parseInvite(j['inviteResponse'] ?? j['InviteResponse']),
+    absenceType:        j['absenceType']         as int?    ?? j['AbsenceType']         as int?,
+    absenceDescription: j['absenceDescription']  as String? ?? j['AbsenceDescription']  as String?,
   );
 }
 

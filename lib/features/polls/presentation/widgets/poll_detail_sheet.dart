@@ -206,6 +206,115 @@ class _PollDetailSheetState extends ConsumerState<PollDetailSheet>
     }
   }
 
+  Future<void> _updateDeadline() async {
+    // 1. Escolher nova data
+    final today = DateTime.now();
+    final initial = _poll.deadlineDate != null
+        ? DateTime.tryParse(_poll.deadlineDate!) ?? today
+        : today;
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial.isAfter(today) ? initial : today,
+      firstDate: today,
+      lastDate: today.add(const Duration(days: 365 * 3)),
+      helpText: 'Selecione o novo prazo',
+    );
+    if (picked == null) return;
+
+    // 2. Escolher horário (opcional — cancelar = sem horário)
+    TimeOfDay? pickedTime;
+    if (mounted) {
+      final wantTime = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Definir horário?'),
+          content: const Text('Deseja definir um horário de encerramento?'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Não')),
+            TextButton(onPressed: () => Navigator.pop(ctx, true),  child: const Text('Sim')),
+          ],
+        ),
+      );
+      if (wantTime == true && mounted) {
+        final now = TimeOfDay.now();
+        final initialTime = _poll.deadlineTime != null
+            ? () {
+                final parts = _poll.deadlineTime!.split(':');
+                return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+              }()
+            : now;
+        if (mounted) {
+          pickedTime = await showTimePicker(
+            context: context,
+            initialTime: initialTime,
+          );
+        }
+      }
+    }
+
+    final dateStr  = '${picked.year.toString().padLeft(4, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+    final timeStr  = pickedTime != null
+        ? '${pickedTime.hour.toString().padLeft(2, '0')}:${pickedTime.minute.toString().padLeft(2, '0')}'
+        : null;
+
+    setState(() => _saving = true);
+    try {
+      await _ds.updateDeadline(
+        widget.groupId, _poll.id,
+        deadlineDate: dateStr,
+        deadlineTime: timeStr,
+      );
+      final updated = await _ds.getPoll(widget.groupId, _poll.id);
+      setState(() => _poll = updated);
+      widget.onUpdated(updated);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Prazo atualizado!')),
+        );
+      }
+    } catch (e) {
+      if (mounted) _showError('Erro ao atualizar prazo: $e');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _clearDeadline() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remover prazo'),
+        content: const Text('Deseja remover o prazo de vencimento desta votação?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Remover', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    setState(() => _saving = true);
+    try {
+      await _ds.updateDeadline(widget.groupId, _poll.id, clearDeadline: true);
+      final updated = await _ds.getPoll(widget.groupId, _poll.id);
+      setState(() => _poll = updated);
+      widget.onUpdated(updated);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Prazo removido.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) _showError('Erro ao remover prazo: $e');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   Future<void> _deletePoll() async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -374,9 +483,11 @@ class _PollDetailSheetState extends ConsumerState<PollDetailSheet>
                       onPickImage: _pickImage,
                       onAddOption: _addOption,
                       onAdminVote: _adminVote,
-                      onClose:    _closePoll,
-                      onReopen:   _reopenPoll,
-                      onDelete:   _deletePoll,
+                      onClose:          _closePoll,
+                      onReopen:         _reopenPoll,
+                      onDelete:         _deletePoll,
+                      onUpdateDeadline: _updateDeadline,
+                      onClearDeadline:  _poll.deadlineDate != null ? _clearDeadline : null,
                     ),
                   ],
                 ],
@@ -523,6 +634,8 @@ class _AdminPollPanel extends StatelessWidget {
   final VoidCallback onClose;
   final VoidCallback onReopen;
   final VoidCallback onDelete;
+  final VoidCallback  onUpdateDeadline;
+  final VoidCallback? onClearDeadline;
 
   const _AdminPollPanel({
     required this.poll,
@@ -540,6 +653,8 @@ class _AdminPollPanel extends StatelessWidget {
     required this.onClose,
     required this.onReopen,
     required this.onDelete,
+    required this.onUpdateDeadline,
+    this.onClearDeadline,
   });
 
   @override
@@ -584,6 +699,8 @@ class _AdminPollPanel extends StatelessWidget {
                     optImageB64: optImageB64, onPickImage: onPickImage,
                     onAddOption: onAddOption, onClose: onClose,
                     onReopen: onReopen, onDelete: onDelete,
+                    onUpdateDeadline: onUpdateDeadline,
+                    onClearDeadline:  onClearDeadline,
                   ),
                   _ResultTab(poll: poll, saving: saving, isDark: isDark, onAdminVote: onAdminVote),
                 ],
@@ -608,12 +725,16 @@ class _OptionsTab extends StatelessWidget {
   final VoidCallback onClose;
   final VoidCallback onReopen;
   final VoidCallback onDelete;
+  final VoidCallback  onUpdateDeadline;
+  final VoidCallback? onClearDeadline;
 
   const _OptionsTab({
     required this.poll, required this.saving, required this.isDark,
     required this.optTextCtrl, required this.optDescCtrl, required this.optImageB64,
     required this.onPickImage, required this.onAddOption,
     required this.onClose, required this.onReopen, required this.onDelete,
+    required this.onUpdateDeadline,
+    this.onClearDeadline,
   });
 
   @override
@@ -691,6 +812,28 @@ class _OptionsTab extends StatelessWidget {
               label: const Text('Excluir', style: TextStyle(fontSize: 13)),
               style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
             ),
+          ]),
+          const SizedBox(height: 8),
+          // Deadline actions
+          Row(children: [
+            Expanded(child: OutlinedButton.icon(
+              onPressed: saving ? null : onUpdateDeadline,
+              icon: const Icon(Icons.calendar_today_outlined, size: 15),
+              label: Text(
+                poll.deadlineDate != null ? 'Alterar prazo' : 'Definir prazo',
+                style: const TextStyle(fontSize: 13),
+              ),
+              style: OutlinedButton.styleFrom(foregroundColor: Colors.amber.shade700),
+            )),
+            if (onClearDeadline != null) ...[
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                onPressed: saving ? null : onClearDeadline,
+                icon: const Icon(Icons.event_busy_outlined, size: 15),
+                label: const Text('Remover prazo', style: TextStyle(fontSize: 13)),
+                style: OutlinedButton.styleFrom(foregroundColor: Colors.red.shade400),
+              ),
+            ],
           ]),
         ],
       ),

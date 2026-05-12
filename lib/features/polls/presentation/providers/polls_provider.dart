@@ -14,6 +14,6 @@ final pollsListProvider = FutureProvider.autoDispose.family<List<PollSummary>, S
 final pendingPollsCountProvider = FutureProvider.autoDispose.family<int, String>(
   (ref, groupId) async {
     final list = await ref.watch(pollsListProvider(groupId).future);
-    return list.where((p) => p.isOpen && !p.hasVoted).length;
+    return list.where((p) => p.isOpen && !p.hasVoted && !p.deadlinePassed).length;
   },
 );

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../auth/presentation/providers/account_store.dart';
+import '../../../dashboard/presentation/providers/dashboard_provider.dart';
 import '../../data/datasources/polls_remote_datasource.dart';
 import '../../domain/entities/poll_detail.dart';
 import '../../domain/entities/poll_summary.dart';
@@ -23,16 +24,41 @@ class PollsPage extends ConsumerStatefulWidget {
 class _PollsPageState extends ConsumerState<PollsPage> {
   _Tab _activeTab = _Tab.events;
 
-  String? get _groupId =>
-      ref.read(accountStoreProvider).activeAccount?.activeGroupId;
+  // Fallback: usa groupId do player ativo se activeGroupId não estiver persistido.
+  String? get _groupId {
+    final acc    = ref.read(accountStoreProvider).activeAccount;
+    final player = ref.read(activePlayerProvider);
+    return acc?.activeGroupId ?? player?.groupId;
+  }
 
   bool get _isAdmin {
     final acc = ref.read(accountStoreProvider).activeAccount;
-    if (acc == null || _groupId == null) return false;
-    return acc.isGroupAdmin(_groupId!);
+    final gid = _groupId;
+    if (acc == null || gid == null) return false;
+    return acc.isAdmin || acc.isGroupAdmin(gid);
   }
 
   PollsRemoteDataSource get _ds => ref.read(pollsDsProvider);
+
+  Future<void> _toggleShowVotes(PollSummary poll) async {
+    final gid = _groupId;
+    if (gid == null) return;
+    final newValue = !poll.showVotes;
+    try {
+      await _ds.toggleShowVotes(gid, poll.id, newValue);
+      _refresh();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(newValue ? 'Votos visíveis' : 'Votos ocultos'),
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Erro: $e'),
+        backgroundColor: AppColors.rose500,
+      ));
+    }
+  }
 
   void _refresh() {
     if (_groupId != null) {
@@ -98,22 +124,38 @@ class _PollsPageState extends ConsumerState<PollsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final groupId = _groupId;
-    final isDark  = Theme.of(context).brightness == Brightness.dark;
+    // watch para reagir quando activePlayer carrega após navegação
+    final account      = ref.watch(accountStoreProvider).activeAccount;
+    final activePlayer = ref.watch(activePlayerProvider);
+    final groupId      = account?.activeGroupId ?? activePlayer?.groupId;
+    final isDark       = Theme.of(context).brightness == Brightness.dark;
+
+    if (groupId == null) {
+      // Spinner enquanto myPlayersProvider ainda carrega
+      if (ref.watch(myPlayersProvider).isLoading) {
+        return Scaffold(
+          backgroundColor: isDark ? AppColors.slate950 : AppColors.slate50,
+          body: const Center(child: CircularProgressIndicator()),
+        );
+      }
+      return Scaffold(
+        backgroundColor: isDark ? AppColors.slate950 : AppColors.slate50,
+        body: _NoGroup(isDark: isDark),
+      );
+    }
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.slate950 : AppColors.slate50,
-      body: groupId == null
-          ? _NoGroup(isDark: isDark)
-          : _Body(
-              groupId:   groupId,
-              activeTab: _activeTab,
-              isAdmin:   _isAdmin,
-              isDark:    isDark,
-              onTabChange:  (t) => setState(() => _activeTab = t),
-              onItemTap:    _openDetail,
-              onRefresh:    _refresh,
-              onCreateTap:  _openCreate,
+      body: _Body(
+              groupId:            groupId,
+              activeTab:          _activeTab,
+              isAdmin:            _isAdmin,
+              isDark:             isDark,
+              onTabChange:        (t) => setState(() => _activeTab = t),
+              onItemTap:          _openDetail,
+              onRefresh:          _refresh,
+              onCreateTap:        _openCreate,
+              onToggleShowVotes:  _toggleShowVotes,
             ),
     );
   }
@@ -130,6 +172,7 @@ class _Body extends ConsumerWidget {
   final ValueChanged<PollSummary> onItemTap;
   final VoidCallback onRefresh;
   final VoidCallback onCreateTap;
+  final Future<void> Function(PollSummary) onToggleShowVotes;
 
   const _Body({
     required this.groupId,
@@ -140,6 +183,7 @@ class _Body extends ConsumerWidget {
     required this.onItemTap,
     required this.onRefresh,
     required this.onCreateTap,
+    required this.onToggleShowVotes,
   });
 
   @override
@@ -172,6 +216,10 @@ class _Body extends ConsumerWidget {
         final polls  = list.where((p) => !p.isEvent).toList();
         final tabList = activeTab == _Tab.events ? events : polls;
 
+        // Only count items that are open and not past their deadline
+        final activeEventCount = events.where((p) => p.isOpen && !p.deadlinePassed).length;
+        final activePollCount  = polls.where((p) => p.isOpen && !p.deadlinePassed).length;
+
         return RefreshIndicator(
           onRefresh: () async => onRefresh(),
           child: _Layout(
@@ -180,11 +228,17 @@ class _Body extends ConsumerWidget {
             isDark:      isDark,
             onTabChange: onTabChange,
             onCreateTap: onCreateTap,
-            eventCount:  events.length,
-            pollCount:   polls.length,
+            eventCount:  activeEventCount,
+            pollCount:   activePollCount,
             child: tabList.isEmpty
                 ? _Empty(isEvents: activeTab == _Tab.events, isAdmin: isAdmin)
-                : _PollList(items: tabList, isEvents: activeTab == _Tab.events, onTap: onItemTap),
+                : _PollList(
+                    items: tabList,
+                    isEvents: activeTab == _Tab.events,
+                    isAdmin: isAdmin,
+                    onTap: onItemTap,
+                    onToggleShowVotes: onToggleShowVotes,
+                  ),
           ),
         );
       },
@@ -447,9 +501,17 @@ class _TabBtn extends StatelessWidget {
 class _PollList extends StatelessWidget {
   final List<PollSummary> items;
   final bool isEvents;
+  final bool isAdmin;
   final ValueChanged<PollSummary> onTap;
+  final Future<void> Function(PollSummary) onToggleShowVotes;
 
-  const _PollList({required this.items, required this.isEvents, required this.onTap});
+  const _PollList({
+    required this.items,
+    required this.isEvents,
+    required this.isAdmin,
+    required this.onTap,
+    required this.onToggleShowVotes,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -472,7 +534,9 @@ class _PollList extends StatelessWidget {
               isDark: isDark,
               items: open,
               isEvents: isEvents,
+              isAdmin: isAdmin,
               onTap: onTap,
+              onToggleShowVotes: onToggleShowVotes,
             ),
             const SizedBox(height: 16),
           ],
@@ -487,7 +551,9 @@ class _PollList extends StatelessWidget {
               isDark: isDark,
               items: closed,
               isEvents: isEvents,
+              isAdmin: isAdmin,
               onTap: onTap,
+              onToggleShowVotes: onToggleShowVotes,
             ),
         ],
       ),
@@ -505,7 +571,9 @@ class _GroupCard extends StatelessWidget {
   final bool     isDark;
   final List<PollSummary> items;
   final bool     isEvents;
+  final bool     isAdmin;
   final ValueChanged<PollSummary> onTap;
+  final Future<void> Function(PollSummary) onToggleShowVotes;
 
   const _GroupCard({
     required this.label,
@@ -517,7 +585,9 @@ class _GroupCard extends StatelessWidget {
     required this.isDark,
     required this.items,
     required this.isEvents,
+    required this.isAdmin,
     required this.onTap,
+    required this.onToggleShowVotes,
   });
 
   @override
@@ -565,9 +635,38 @@ class _GroupCard extends StatelessWidget {
             ...items.map((p) => Column(
               children: [
                 Divider(height: 1, color: isDark ? AppColors.slate800 : AppColors.slate100),
-                isEvents
-                    ? EventCard(poll: p, onTap: () => onTap(p))
-                    : PollCard(poll: p, onTap: () => onTap(p)),
+                if (!isEvents && isAdmin)
+                  Stack(
+                    children: [
+                      PollCard(poll: p, onTap: () => onTap(p)),
+                      Positioned(
+                        right: 32,
+                        top: 0,
+                        bottom: 0,
+                        child: Center(
+                          child: GestureDetector(
+                            onTap: () => onToggleShowVotes(p),
+                            child: Padding(
+                              padding: const EdgeInsets.all(8),
+                              child: Icon(
+                                p.showVotes
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined,
+                                size: 18,
+                                color: p.showVotes
+                                    ? Colors.blue.shade400
+                                    : (isDark ? AppColors.slate500 : AppColors.slate400),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                else if (isEvents)
+                  EventCard(poll: p, onTap: () => onTap(p))
+                else
+                  PollCard(poll: p, onTap: () => onTap(p)),
               ],
             )),
           ],

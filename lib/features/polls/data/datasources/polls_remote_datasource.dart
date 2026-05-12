@@ -1,4 +1,4 @@
-import 'package:dio/dio.dart';
+﻿import 'package:dio/dio.dart';
 import '../../../../core/api/api_constants.dart';
 import '../../domain/entities/poll_detail.dart';
 import '../../domain/entities/poll_summary.dart';
@@ -66,6 +66,31 @@ class PollsRemoteDataSource {
     return PollDetail.fromJson(_unwrapMap(res.data)!);
   }
 
+  // ── Deadline ──────────────────────────────────────────────────────────────
+
+  Future<void> updateDeadline(
+    String groupId,
+    String pollId, {
+    String? deadlineDate,
+    String? deadlineTime,
+    bool clearDeadline = false,
+  }) async {
+    await _dio.patch(
+      ApiConstants.pollDeadline(groupId, pollId),
+      data: {
+        'deadlineDate':  deadlineDate,
+        'deadlineTime':  deadlineTime,
+        'clearDeadline': clearDeadline,
+      },
+    );
+  }
+
+  // ── Show-votes toggle ─────────────────────────────────────────────────────
+
+  Future<void> toggleShowVotes(String groupId, String pollId, bool show) async {
+    await _dio.patch(ApiConstants.pollShowVotes(groupId, pollId), data: {'showVotes': show});
+  }
+
   // ── Voting ────────────────────────────────────────────────────────────────
 
   Future<PollDetail> castVote(String groupId, String pollId, List<String> optionIds) async {
@@ -95,7 +120,7 @@ class PollsRemoteDataSource {
   List<dynamic> _unwrapList(dynamic data) {
     if (data is List) return data;
     if (data is Map) {
-      final d = data['data'];
+      final d = data['data'] ?? data['Data'];
       if (d is List) return d;
     }
     return [];
@@ -103,7 +128,7 @@ class PollsRemoteDataSource {
 
   Map<String, dynamic>? _unwrapMap(dynamic data) {
     if (data is Map<String, dynamic>) {
-      final d = data['data'];
+      final d = data['data'] ?? data['Data'];
       if (d is Map<String, dynamic>) return d;
       return data;
     }

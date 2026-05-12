@@ -51,7 +51,7 @@ class HistoryMatch {
       teamBColorHex: bHex,
       teamAColorName: aName as String?,
       teamBColorName: bName as String?,
-      statusName:    (json['statusName'] ?? json['status']) as String?,
+      statusName:    (json['statusName'] ?? json['status'] ?? json['stepKey']) as String?,
       placeName:     json['placeName'] as String?,
     );
   }

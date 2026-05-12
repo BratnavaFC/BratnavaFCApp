@@ -6,9 +6,12 @@ import '../../domain/entities/match_details.dart';
 
 // ── DataSource ────────────────────────────────────────────────────────────────
 
-final _historyDsProvider = Provider<HistoryRemoteDataSource>(
+final historyDsProvider = Provider<HistoryRemoteDataSource>(
   (ref) => HistoryRemoteDataSource(ref.watch(dioProvider)),
 );
+
+// Keep private alias for internal use
+final _historyDsProvider = historyDsProvider;
 
 // ── History list ──────────────────────────────────────────────────────────────
 
@@ -18,6 +21,17 @@ final historyProvider =
     final ds = ref.watch(_historyDsProvider);
     return ds.fetchHistory(groupId);
   },
+);
+
+// ── My match IDs (for "only my matches" filter) ──────────────────────────────
+
+typedef MyMatchIdsArgs = ({String groupId, String playerId});
+
+final myMatchIdsProvider =
+    FutureProvider.autoDispose.family<Set<String>, MyMatchIdsArgs>(
+  (ref, args) => ref
+      .watch(_historyDsProvider)
+      .fetchMyMatchIds(args.groupId, args.playerId),
 );
 
 // ── Match details ─────────────────────────────────────────────────────────────

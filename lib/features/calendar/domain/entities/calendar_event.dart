@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import '../../../../core/utils/date_utils.dart';
 
 // ── CalendarEvent ──────────────────────────────────────────────────────────────
 
@@ -62,7 +63,7 @@ class CalendarEvent extends Equatable {
   };
 
   bool get isPast {
-    try { return DateTime.now().isAfter(DateTime.parse(date)); }
+    try { return DateTime.now().isAfter(AppDateUtils.parseOrNow(date)); }
     catch (_) { return false; }
   }
 

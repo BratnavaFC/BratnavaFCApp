@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import '../../../../core/utils/date_utils.dart';
 
 class AppUser extends Equatable {
   final String  id;
@@ -57,7 +58,7 @@ class AppUser extends Equatable {
     final s = v.toString();
     if (s.isEmpty) return null;
     try {
-      final d = DateTime.parse(s);
+      final d = AppDateUtils.parseOrNow(s);
       return '${d.day.toString().padLeft(2, '0')}/'
           '${d.month.toString().padLeft(2, '0')}/'
           '${d.year}';

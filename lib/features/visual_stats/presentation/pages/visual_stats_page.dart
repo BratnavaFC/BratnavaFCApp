@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/presentation/widgets/group_icon_renderer.dart';
 import '../../../auth/presentation/providers/account_store.dart';
+import '../../../dashboard/presentation/providers/dashboard_provider.dart';
 import '../../../group_settings/presentation/providers/group_settings_provider.dart';
 import '../../domain/entities/visual_stats_report.dart';
 import '../providers/visual_stats_provider.dart';
@@ -65,13 +66,15 @@ class _GlobalSynergyRow {
 
 // ── Sort key ──────────────────────────────────────────────────────────────────
 
-enum _SortKey { winRate, games, mvps, goals, assists, ownGoals, name }
+enum _SortKey { winRate, wins, games, mvps, mvpVotes, goals, assists, ownGoals, name }
 
 extension _SortKeyLabel on _SortKey {
   String get shortLabel => switch (this) {
     _SortKey.winRate  => 'Win Rate',
+    _SortKey.wins     => 'Vitórias',
     _SortKey.games    => 'Jogos',
     _SortKey.mvps     => 'MVPs',
+    _SortKey.mvpVotes => 'Votos MVP',
     _SortKey.goals    => 'Gols',
     _SortKey.assists  => 'Assists',
     _SortKey.ownGoals => 'GC',
@@ -107,8 +110,10 @@ class _VisualStatsPageState extends ConsumerState<VisualStatsPage> {
     if (q.isNotEmpty) list = list.where((p) => p.name.toLowerCase().contains(q)).toList();
     switch (_sortKey) {
       case _SortKey.winRate:  list.sort((a, b) => _normalizeWR(b.winRate).compareTo(_normalizeWR(a.winRate)));
+      case _SortKey.wins:     list.sort((a, b) => b.wins.compareTo(a.wins));
       case _SortKey.games:    list.sort((a, b) => b.gamesPlayed.compareTo(a.gamesPlayed));
       case _SortKey.mvps:     list.sort((a, b) => b.mvps.compareTo(a.mvps));
+      case _SortKey.mvpVotes: list.sort((a, b) => b.mvpVotes.compareTo(a.mvpVotes));
       case _SortKey.goals:    list.sort((a, b) => b.goals.compareTo(a.goals));
       case _SortKey.assists:  list.sort((a, b) => b.assists.compareTo(a.assists));
       case _SortKey.ownGoals: list.sort((a, b) => b.ownGoals.compareTo(a.ownGoals));
@@ -119,9 +124,16 @@ class _VisualStatsPageState extends ConsumerState<VisualStatsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final account = ref.watch(accountStoreProvider).activeAccount;
-    final groupId = account?.activeGroupId;
+    final account      = ref.watch(accountStoreProvider).activeAccount;
+    final activePlayer = ref.watch(activePlayerProvider);
+    final groupId      = account?.activeGroupId ?? activePlayer?.groupId;
+
+    // Enquanto myPlayersProvider carrega, mostra spinner em vez de "sem grupo"
     if (groupId == null || groupId.isEmpty) {
+      final playersAsync = ref.watch(myPlayersProvider);
+      if (playersAsync.isLoading) {
+        return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      }
       return const Scaffold(body: _NoGroupState());
     }
 
@@ -158,7 +170,23 @@ class _VisualStatsPageState extends ConsumerState<VisualStatsPage> {
                             icons:     icons,
                             onSort:    (k) => setState(() => _sortKey = k),
                             onSearch:  (v) => setState(() => _search = v),
-                            onPlayerTap: (id) => setState(() => _showRankings = false),
+                            onPlayerTap: (id) {
+                              final player = report.players.firstWhere(
+                                (p) => p.playerId == id,
+                                orElse: () => sorted.first,
+                              );
+                              final isDark = Theme.of(context).brightness == Brightness.dark;
+                              showModalBottomSheet(
+                                context:            context,
+                                isScrollControlled: true,
+                                backgroundColor:    Colors.transparent,
+                                builder: (_) => _PlayerDetailSheet(
+                                  player: player,
+                                  icons:  icons,
+                                  isDark: isDark,
+                                ),
+                              );
+                            },
                           )
                         : _PlayersContent(
                             report:     report,
@@ -248,10 +276,10 @@ class _VisualStatsPageState extends ConsumerState<VisualStatsPage> {
               // Tab buttons
               Row(
                 children: [
-                  _tabBtn('Rankings',  Icons.bar_chart_rounded, selected: _showRankings,
+                  _tabBtn('Geral',       Icons.bar_chart_rounded,      selected: _showRankings,
                       onTap: () => setState(() => _showRankings = true)),
                   const SizedBox(width: 6),
-                  _tabBtn('Jogadores', Icons.group_outlined, selected: !_showRankings,
+                  _tabBtn('Por partida', Icons.person_outline_rounded,  selected: !_showRankings,
                       onTap: () => setState(() => _showRankings = false)),
                 ],
               ),
@@ -341,16 +369,22 @@ class _RankingsContent extends StatelessWidget {
               ),
             ),
             Divider(height: 1, color: isDark ? AppColors.slate700 : AppColors.slate100),
-            // Table (horizontally scrollable)
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: _RankingTable(
-                sorted:     sorted,
-                icons:      icons,
-                isDark:     isDark,
-                onTap:      onPlayerTap,
-              ),
-            ),
+            // Ranking list
+            if (sorted.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Center(child: Text('Nenhum jogador encontrado.',
+                    style: TextStyle(fontSize: 13,
+                        color: isDark ? AppColors.slate500 : AppColors.slate400))),
+              )
+            else
+              ...sorted.asMap().entries.map((e) => _RankingListItem(
+                rank:   e.key + 1,
+                player: e.value,
+                icons:  icons,
+                isDark: isDark,
+                onTap:  () => onPlayerTap(e.value.playerId),
+              )),
           ],
         )),
 
@@ -581,6 +615,148 @@ class _RankingTable extends StatelessWidget {
             );
           }),
       ],
+    );
+  }
+}
+
+// ── Ranking list item (Geral tab) ─────────────────────────────────────────────
+
+class _RankingListItem extends StatelessWidget {
+  final int                   rank;
+  final PlayerVisualStatsItem player;
+  final GroupIcons            icons;
+  final bool                  isDark;
+  final VoidCallback          onTap;
+
+  const _RankingListItem({
+    required this.rank,
+    required this.player,
+    required this.icons,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final wr    = _normalizeWR(player.winRate);
+    final medal = rank == 1 ? '🥇' : rank == 2 ? '🥈' : rank == 3 ? '🥉' : null;
+
+    return InkWell(
+      onTap: onTap,
+      child: Opacity(
+        opacity: player.isActive ? 1.0 : 0.45,
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(
+              color: isDark ? AppColors.slate700 : AppColors.slate100, width: 0.5)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Rank number
+              SizedBox(
+                width: 22,
+                child: Text('$rank',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 11, fontWeight: FontWeight.w600,
+                    color: isDark ? AppColors.slate500 : AppColors.slate400,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              // Medal (top 3) or blank space
+              SizedBox(
+                width: 18,
+                child: medal != null
+                    ? Text(medal, style: const TextStyle(fontSize: 13))
+                    : null,
+              ),
+              const SizedBox(width: 6),
+              // Name + inline stats
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      if (player.isGoalkeeper) ...[
+                        renderGroupIcon(icons.goalkeeper, size: 11,
+                            color: isDark ? AppColors.slate400 : AppColors.slate500),
+                        const SizedBox(width: 3),
+                      ],
+                      Flexible(child: Text(
+                        player.name,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w700,
+                          color: isDark ? Colors.white : AppColors.slate900,
+                        ),
+                      )),
+                      if (player.mvps > 0) ...[
+                        const SizedBox(width: 4),
+                        renderGroupIcon(icons.mvp, size: 11,
+                            color: const Color(0xFFFBBF24)),
+                      ],
+                      if (!player.isActive) ...[
+                        const SizedBox(width: 4),
+                        Text('inativo', style: TextStyle(
+                            fontSize: 9,
+                            color: isDark ? AppColors.slate500 : AppColors.slate400)),
+                      ],
+                    ]),
+                    const SizedBox(height: 2),
+                    _InlineStats(player: player, icons: icons, isDark: isDark),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              // WR bar + %
+              SizedBox(width: 90, child: _WRBar(value: wr, isDark: isDark)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InlineStats extends StatelessWidget {
+  final PlayerVisualStatsItem player;
+  final GroupIcons            icons;
+  final bool                  isDark;
+
+  const _InlineStats({
+    required this.player, required this.icons, required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final dim = isDark ? AppColors.slate500 : AppColors.slate400;
+    return RichText(
+      text: TextSpan(
+        style: TextStyle(
+          fontSize: 10, color: dim,
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ),
+        children: [
+          TextSpan(text: '${player.gamesPlayed}j '),
+          TextSpan(text: '${player.wins}V',
+              style: const TextStyle(color: Color(0xFF16A34A), fontWeight: FontWeight.w600)),
+          TextSpan(text: ' ${player.ties}E '),
+          TextSpan(text: '${player.losses}D',
+              style: const TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.w600)),
+          if (player.mvps > 0)
+            TextSpan(text: ' · 🏆${player.mvps}'),
+          if (player.goals > 0)
+            TextSpan(text: ' · ⚽${player.goals}'),
+          if (player.assists > 0)
+            TextSpan(text: ' · 🤝${player.assists}'),
+          if (player.mvpVotes > 0)
+            TextSpan(text: ' · ${player.mvpVotes} votos'),
+        ],
+      ),
     );
   }
 }

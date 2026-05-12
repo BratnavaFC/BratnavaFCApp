@@ -47,7 +47,7 @@ class TeamColorRemoteDataSource {
   List<dynamic> _unwrapList(dynamic data) {
     if (data is List) return data;
     if (data is Map) {
-      final d = data['data'];
+      final d = data['data'] ?? data['Data'];
       if (d is List) return d;
     }
     return [];
@@ -57,6 +57,9 @@ class TeamColorRemoteDataSource {
     if (data is Map<String, dynamic>) {
       if (data.containsKey('data') && data['data'] is Map<String, dynamic>) {
         return data['data'] as Map<String, dynamic>;
+      }
+      if (data.containsKey('Data') && data['Data'] is Map<String, dynamic>) {
+        return data['Data'] as Map<String, dynamic>;
       }
       return data;
     }

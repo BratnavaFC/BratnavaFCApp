@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/date_utils.dart';
 import '../../domain/entities/calendar_event.dart';
 import 'calendar_utils.dart';
 
@@ -194,7 +195,7 @@ class EventDetailSheet extends StatelessWidget {
 
   static String _formatDate(String dateStr) {
     try {
-      final d = DateTime.parse(dateStr);
+      final d = AppDateUtils.parseOrNow(dateStr);
       const months = [
         'jan', 'fev', 'mar', 'abr', 'mai', 'jun',
         'jul', 'ago', 'set', 'out', 'nov', 'dez',

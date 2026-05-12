@@ -19,7 +19,8 @@ class HistoryPage extends ConsumerStatefulWidget {
 
 class _HistoryPageState extends ConsumerState<HistoryPage> {
   static const _pageSize = 20;
-  int _page = 1;
+  int  _page     = 1;
+  bool _onlyMine = false;
   final _scrollCtrl = ScrollController();
 
   @override
@@ -40,15 +41,28 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
 
   @override
   Widget build(BuildContext context) {
-    final account     = ref.watch(accountStoreProvider).activeAccount;
+    final account      = ref.watch(accountStoreProvider).activeAccount;
     final activePlayer = ref.watch(activePlayerProvider);
-    final groupId    = account?.activeGroupId ?? activePlayer?.groupId;
-    final isDark     = Theme.of(context).brightness == Brightness.dark;
+    final groupId      = account?.activeGroupId ?? activePlayer?.groupId;
+    final myPlayerId   = account?.activePlayerId ?? activePlayer?.playerId;
+    final isDark       = Theme.of(context).brightness == Brightness.dark;
+
+    // Always eagerly watch so data is ready when the filter is toggled.
+    AsyncValue<Set<String>>? myMatchIdsAsync;
+    if (groupId != null && myPlayerId != null) {
+      myMatchIdsAsync = ref.watch(
+        myMatchIdsProvider((groupId: groupId, playerId: myPlayerId)),
+      );
+    }
 
     return RefreshIndicator(
       onRefresh: () async {
         if (groupId != null) {
           ref.invalidate(historyProvider(groupId));
+          if (myPlayerId != null) {
+            ref.invalidate(
+                myMatchIdsProvider((groupId: groupId, playerId: myPlayerId)));
+          }
           setState(() => _page = 1);
         }
       },
@@ -58,8 +72,14 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
           // ── Header ──────────────────────────────────────────────────
           SliverToBoxAdapter(
             child: _Header(
-              groupId: groupId,
-              isDark:  isDark,
+              groupId:   groupId,
+              isDark:    isDark,
+              onlyMine:  _onlyMine,
+              canFilter: myPlayerId != null,
+              onToggleMine: () => setState(() {
+                _onlyMine = !_onlyMine;
+                _page = 1;
+              }),
               onRefresh: groupId == null
                   ? null
                   : () => ref.invalidate(historyProvider(groupId)),
@@ -73,11 +93,13 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
           ] else ...[
             SliverToBoxAdapter(
               child: _HistoryList(
-                groupId:  groupId,
-                page:     _page,
-                pageSize: _pageSize,
-                isDark:   isDark,
-                onPageChanged: _changePage,
+                groupId:         groupId,
+                page:            _page,
+                pageSize:        _pageSize,
+                isDark:          isDark,
+                onlyMine:        _onlyMine,
+                myMatchIdsAsync: myMatchIdsAsync,
+                onPageChanged:   _changePage,
               ),
             ),
             const SliverToBoxAdapter(child: SizedBox(height: 24)),
@@ -93,9 +115,19 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
 class _Header extends ConsumerWidget {
   final String?      groupId;
   final bool         isDark;
+  final bool         onlyMine;
+  final bool         canFilter;
+  final VoidCallback onToggleMine;
   final VoidCallback? onRefresh;
 
-  const _Header({required this.groupId, required this.isDark, this.onRefresh});
+  const _Header({
+    required this.groupId,
+    required this.isDark,
+    required this.onlyMine,
+    required this.canFilter,
+    required this.onToggleMine,
+    this.onRefresh,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -104,7 +136,10 @@ class _Header extends ConsumerWidget {
         : const AsyncValue<List<HistoryMatch>>.data([]);
 
     final isLoading = histAsync.isLoading;
-    final total     = histAsync.valueOrNull?.length ?? 0;
+    final total     = histAsync.valueOrNull?.where((m) {
+      final s = m.statusName?.toLowerCase().trim() ?? '';
+      return s.contains('final') || s == 'done' || s == 'finalizado';
+    }).length ?? 0;
 
     return Container(
       margin: const EdgeInsets.all(16),
@@ -128,8 +163,10 @@ class _Header extends ConsumerWidget {
           ),
         ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(children: [
           // Icon box
           Container(
             width: 52, height: 52,
@@ -233,6 +270,50 @@ class _Header extends ConsumerWidget {
             ),
         ],
       ),
+
+      // ── "Só minhas" filter chip ──────────────────────────────────
+      if (canFilter) ...[
+        const SizedBox(height: 12),
+        GestureDetector(
+          onTap: onToggleMine,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            decoration: BoxDecoration(
+              color: onlyMine ? Colors.white : Colors.white.withAlpha(25),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: onlyMine ? Colors.white : Colors.white.withAlpha(80),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.person_rounded,
+                  size:  13,
+                  color: onlyMine
+                      ? const Color(0xFF0f172a)
+                      : Colors.white.withAlpha(204),
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  'Só minhas partidas',
+                  style: TextStyle(
+                    fontSize:   12,
+                    fontWeight: FontWeight.w600,
+                    color: onlyMine
+                        ? const Color(0xFF0f172a)
+                        : Colors.white.withAlpha(204),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+        ],
+      ),
     );
   }
 }
@@ -271,17 +352,21 @@ class _NoGroup extends StatelessWidget {
 // ── List ──────────────────────────────────────────────────────────────────────
 
 class _HistoryList extends ConsumerWidget {
-  final String groupId;
-  final int    page;
-  final int    pageSize;
-  final bool   isDark;
-  final void   Function(int) onPageChanged;
+  final String      groupId;
+  final int         page;
+  final int         pageSize;
+  final bool        isDark;
+  final bool        onlyMine;
+  final AsyncValue<Set<String>>? myMatchIdsAsync;
+  final void        Function(int) onPageChanged;
 
   const _HistoryList({
     required this.groupId,
     required this.page,
     required this.pageSize,
     required this.isDark,
+    required this.onlyMine,
+    this.myMatchIdsAsync,
     required this.onPageChanged,
   });
 
@@ -303,14 +388,34 @@ class _HistoryList extends ConsumerWidget {
         ),
       ),
       data: (all) {
+        // Only finalized matches belong in history
+        final finalized = all.where((m) {
+          final s = m.statusName?.toLowerCase().trim() ?? '';
+          return s.contains('final') || s == 'done' || s == 'finalizado';
+        }).toList();
+
+        // Apply "só minhas" filter if active — show spinner while IDs are loading
+        if (onlyMine) {
+          if (myMatchIdsAsync == null || myMatchIdsAsync!.isLoading) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 48),
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+        }
+        final myMatchIds = myMatchIdsAsync?.valueOrNull;
+        final filtered = (onlyMine && myMatchIds != null)
+            ? finalized.where((m) => myMatchIds.contains(m.id)).toList()
+            : finalized;
+
         // Sort newest first
-        final sorted = [...all]..sort((a, b) {
+        final sorted = [...filtered]..sort((a, b) {
             final da = a.playedAt?.millisecondsSinceEpoch ?? 0;
             final db = b.playedAt?.millisecondsSinceEpoch ?? 0;
             return db.compareTo(da);
           });
 
-        if (sorted.isEmpty) return _EmptyState(isDark: isDark);
+        if (sorted.isEmpty) return _EmptyState(isDark: isDark, onlyMine: onlyMine);
 
         final totalPages = (sorted.length / pageSize).ceil().clamp(1, 9999);
         final safeP      = page.clamp(1, totalPages);
@@ -430,17 +535,18 @@ class _MatchCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Full date
-                        Text(
-                          dates?.full ?? match.id,
-                          style: TextStyle(
-                            fontSize:   13,
-                            fontWeight: FontWeight.w600,
-                            color: isDark ? Colors.white : AppColors.slate900,
+                        // Place name as primary title
+                        if (match.placeName != null)
+                          Text(
+                            match.placeName!,
+                            style: TextStyle(
+                              fontSize:   13,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? Colors.white : AppColors.slate900,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
                         const SizedBox(height: 5),
                         // Meta row
                         Wrap(
@@ -473,30 +579,6 @@ class _MatchCard extends StatelessWidget {
                               _StatusBadge(
                                 status: match.statusName!,
                                 isDark: isDark,
-                              ),
-                            // Place
-                            if (match.placeName != null)
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.location_on_outlined,
-                                    size:  10,
-                                    color: isDark
-                                        ? AppColors.slate500
-                                        : AppColors.slate400,
-                                  ),
-                                  const SizedBox(width: 2),
-                                  Text(
-                                    match.placeName!,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: isDark
-                                          ? AppColors.slate500
-                                          : AppColors.slate400,
-                                    ),
-                                  ),
-                                ],
                               ),
                           ],
                         ),
@@ -892,7 +974,8 @@ class _Skeletons extends StatelessWidget {
 
 class _EmptyState extends StatelessWidget {
   final bool isDark;
-  const _EmptyState({required this.isDark});
+  final bool onlyMine;
+  const _EmptyState({required this.isDark, this.onlyMine = false});
 
   @override
   Widget build(BuildContext context) {
@@ -926,7 +1009,9 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'O histórico aparecerá após a primeira partida finalizada.',
+              onlyMine
+                  ? 'Você ainda não participou de nenhuma partida registrada.'
+                  : 'O histórico aparecerá após a primeira partida criada.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 12,

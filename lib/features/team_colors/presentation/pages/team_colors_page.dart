@@ -3,6 +3,7 @@ import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../auth/presentation/providers/account_store.dart';
+import '../../../dashboard/presentation/providers/dashboard_provider.dart';
 import '../../data/datasources/team_color_remote_datasource.dart';
 import '../../domain/entities/team_color.dart';
 import '../providers/team_colors_provider.dart';
@@ -21,8 +22,10 @@ class _TeamColorsPageState extends ConsumerState<TeamColorsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final account  = ref.watch(accountStoreProvider).activeAccount;
-    final groupId   = account?.activeGroupId;
+    final account      = ref.watch(accountStoreProvider).activeAccount;
+    final activePlayer = ref.watch(activePlayerProvider);
+    // Fallback: usa groupId do player ativo se activeGroupId não estiver persistido.
+    final groupId   = account?.activeGroupId ?? activePlayer?.groupId;
     final groupIdNN = groupId; // non-null alias used in closures
     final canManage = account != null &&
         groupIdNN != null &&
@@ -58,8 +61,11 @@ class _TeamColorsPageState extends ConsumerState<TeamColorsPage> {
           ),
 
           if (groupId == null) ...[
+            // Enquanto myPlayersProvider carrega, spinner em vez de "sem grupo"
             SliverFillRemaining(
-              child: _NoGroupState(isDark: isDark),
+              child: ref.watch(myPlayersProvider).isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _NoGroupState(isDark: isDark),
             ),
           ] else ...[
             SliverToBoxAdapter(

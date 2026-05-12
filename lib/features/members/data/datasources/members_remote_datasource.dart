@@ -56,7 +56,7 @@ class MembersRemoteDataSource {
     required String currentPassword,
     required String newPassword,
   }) async {
-    await _dio.post(
+    await _dio.put(
       ApiConstants.changePassword(id),
       data: {
         'currentPassword': currentPassword,
@@ -69,7 +69,7 @@ class MembersRemoteDataSource {
     final url = activate
         ? ApiConstants.activateUser(id)
         : ApiConstants.deactivateUser(id);
-    final res = await _dio.post(url);
+    final res = await _dio.put(url);
     // Some APIs return the updated user; some return 204. Handle both.
     if (res.data == null || res.statusCode == 204) {
       return fetchUserById(id);
@@ -80,10 +80,11 @@ class MembersRemoteDataSource {
   // ── Players (group) ───────────────────────────────────────────────────────────
 
   Future<List<GroupPlayer>> fetchGroupPlayers(String groupId) async {
-    final res = await _dio.get(ApiConstants.groupPlayers(groupId));
+    final res = await _dio.get(ApiConstants.playersMe);
     final raw = _unwrapList(res.data);
     return raw
         .map((e) => GroupPlayer.fromJson(e as Map<String, dynamic>))
+        .where((p) => p.groupId == groupId)
         .toList();
   }
 
@@ -139,7 +140,7 @@ class MembersRemoteDataSource {
   List<dynamic> _unwrapList(dynamic data) {
     if (data is List) return data;
     if (data is Map) {
-      final d = data['data'];
+      final d = data['data'] ?? data['Data'];
       if (d is List) return d;
     }
     return [];
@@ -150,10 +151,10 @@ class MembersRemoteDataSource {
   List<dynamic> _unwrapPagedList(dynamic data) {
     if (data is List) return data;
     if (data is Map) {
-      final d = data['data'];
+      final d = data['data'] ?? data['Data'];
       if (d is List) return d;
       if (d is Map) {
-        final items = d['items'];
+        final items = d['items'] ?? d['Items'];
         if (items is List) return items;
       }
     }
@@ -164,6 +165,9 @@ class MembersRemoteDataSource {
     if (data is Map<String, dynamic>) {
       if (data.containsKey('data') && data['data'] is Map<String, dynamic>) {
         return data['data'] as Map<String, dynamic>;
+      }
+      if (data.containsKey('Data') && data['Data'] is Map<String, dynamic>) {
+        return data['Data'] as Map<String, dynamic>;
       }
       return data;
     }

@@ -1023,14 +1023,29 @@ class _UserDetailSheetState extends ConsumerState<_UserDetailSheet> {
     }
   }
 
+  void _showChangePassword() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ChangePasswordSheet(
+        userId: widget.user.id,
+        isDark: widget.isDark,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final dark = widget.isDark;
-    final bg = dark ? AppColors.slate900 : Colors.white;
-    final fgSub = dark ? AppColors.slate400 : AppColors.slate500;
+    final dark   = widget.isDark;
+    final bg     = dark ? AppColors.slate900 : Colors.white;
+    final fgSub  = dark ? AppColors.slate400 : AppColors.slate500;
     final fgMain = dark ? AppColors.slate100 : AppColors.slate800;
-    final fill = dark ? AppColors.slate800 : AppColors.slate50;
+    final fill   = dark ? AppColors.slate800 : AppColors.slate50;
     final border = dark ? AppColors.slate700 : AppColors.slate200;
+
+    final myUserId = ref.read(accountStoreProvider).activeAccount?.userId;
+    final isMe = myUserId != null && widget.user.id == myUserId;
 
     InputDecoration dec(String hint) => InputDecoration(
           hintText: hint,
@@ -1283,43 +1298,28 @@ class _UserDetailSheetState extends ConsumerState<_UserDetailSheet> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: fill,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: border),
+
+                    // Alterar senha — visível apenas quando o admin edita a própria conta
+                    if (isMe) ...[
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _showChangePassword,
+                          icon: const Icon(Icons.lock_outline_rounded, size: 16),
+                          label: const Text('Alterar senha'),
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(color: border),
+                            foregroundColor: dark ? AppColors.slate300 : AppColors.slate600,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
                       ),
-                      child: Wrap(
-                        spacing: 16,
-                        runSpacing: 4,
-                        children: [
-                          _MetaChip(
-                            label: 'Status',
-                            value: _isActive ? 'Ativo' : 'Inativo',
-                            isDark: dark,
-                          ),
-                          _MetaChip(
-                            label: 'Role',
-                            value: widget.user.roles.isNotEmpty
-                                ? widget.user.roles.first
-                                : '—',
-                            isDark: dark,
-                          ),
-                          _MetaChip(
-                            label: 'Criado em',
-                            value: widget.user.createdAt ?? '—',
-                            isDark: dark,
-                          ),
-                          _MetaChip(
-                            label: 'Atualizado em',
-                            value: widget.user.updatedAt ?? '—',
-                            isDark: dark,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
+                      const SizedBox(height: 12),
+                    ],
+
                     Row(
                       children: [
                         OutlinedButton(
@@ -1395,39 +1395,6 @@ class _UserDetailSheetState extends ConsumerState<_UserDetailSheet> {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _MetaChip extends StatelessWidget {
-  final String label;
-  final String value;
-  final bool isDark;
-  const _MetaChip({
-    required this.label,
-    required this.value,
-    required this.isDark,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return RichText(
-      text: TextSpan(
-        style: TextStyle(
-          fontSize: 11,
-          color: isDark ? AppColors.slate400 : AppColors.slate500,
-        ),
-        children: [
-          TextSpan(text: '$label: '),
-          TextSpan(
-            text: value,
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              color: isDark ? AppColors.slate200 : AppColors.slate700,
-            ),
-          ),
-        ],
       ),
     );
   }

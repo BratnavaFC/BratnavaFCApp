@@ -1,4 +1,4 @@
-import 'package:dio/dio.dart';
+﻿import 'package:dio/dio.dart';
 import '../../../../core/api/api_constants.dart';
 import '../../domain/entities/calendar_event.dart';
 
@@ -57,7 +57,7 @@ class CalendarRemoteDataSource {
 
   dynamic _unwrap(dynamic data) {
     if (data is List) return data;
-    if (data is Map) return data['data'] ?? [];
+    if (data is Map) return data['data'] ?? data['Data'] ?? [];
     return [];
   }
 }

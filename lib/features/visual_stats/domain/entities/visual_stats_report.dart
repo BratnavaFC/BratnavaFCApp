@@ -36,6 +36,7 @@ class PlayerVisualStatsItem {
   final int                    goals;
   final int                    assists;
   final int                    ownGoals;
+  final int                    mvpVotes;    // total MVP votes received
   final List<PlayerSynergyItem> synergies;
 
   const PlayerVisualStatsItem({
@@ -52,6 +53,7 @@ class PlayerVisualStatsItem {
     required this.goals,
     required this.assists,
     required this.ownGoals,
+    this.mvpVotes = 0,
     required this.synergies,
   });
 
@@ -80,6 +82,7 @@ class PlayerVisualStatsItem {
       goals:       (j['goals']       as num?)?.toInt() ?? 0,
       assists:     (j['assists']     as num?)?.toInt() ?? 0,
       ownGoals:    (j['ownGoals']    as num?)?.toInt() ?? 0,
+      mvpVotes:    (j['mvpVotes']    as num?)?.toInt() ?? 0,
       synergies:   synList,
     );
   }

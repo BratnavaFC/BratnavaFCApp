@@ -14,7 +14,9 @@ final _dashboardDsProvider = Provider<DashboardRemoteDataSource>(
 
 // ── Jogadores do usuário ──────────────────────────────────────────────────────
 
-final myPlayersProvider = FutureProvider.autoDispose<List<MyPlayer>>((ref) {
+/// Não usa autoDispose — precisa sobreviver à navegação entre abas para que
+/// Histórico, Replays e outras telas encontrem o grupo do jogador sem refetch.
+final myPlayersProvider = FutureProvider<List<MyPlayer>>((ref) {
   // Re-fetch sempre que a conta ativa mudar.
   ref.watch(accountStoreProvider.select((s) => s.activeAccountId));
   final ds = ref.watch(_dashboardDsProvider);
@@ -41,13 +43,13 @@ final recentMatchesProvider =
 
 // ── Jogador ativo ─────────────────────────────────────────────────────────────
 
-/// ID do jogador selecionado atualmente no Dashboard.
-final activePlayerIdProvider =
-    StateProvider.autoDispose<String?>((ref) => null);
+/// ID do jogador selecionado manualmente pelo usuário no Dashboard.
+/// Não usa autoDispose — a seleção precisa persistir ao navegar entre abas.
+final activePlayerIdProvider = StateProvider<String?>((ref) => null);
 
 /// Jogador ativo resolvido (usa o activePlayerId do account store ou
-/// o primeiro da lista).
-final activePlayerProvider = Provider.autoDispose<MyPlayer?>((ref) {
+/// o primeiro da lista). Não autoDispose pelo mesmo motivo acima.
+final activePlayerProvider = Provider<MyPlayer?>((ref) {
   final players       = ref.watch(myPlayersProvider).valueOrNull ?? [];
   final accountActive = ref.watch(accountStoreProvider).activeAccount;
   final manualId      = ref.watch(activePlayerIdProvider);

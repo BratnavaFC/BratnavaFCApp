@@ -17,9 +17,13 @@ class AppDateUtils {
 
 /// Strips timezone suffix, parses as wall-clock time, then subtracts 3 hours
 /// to compensate for the backend always returning times 3 hours ahead (UTC vs UTC-3).
+/// Date-only strings (no time component) are returned as-is to avoid shifting
+/// the calendar date.
 DateTime _parseDate(String? s) {
   if (s == null || s.isEmpty) return DateTime.now();
   final bare = s.replaceFirst(RegExp(r'Z$|[+-]\d{2}:\d{2}$'), '');
   final dt = DateTime.tryParse(bare) ?? DateTime.now();
-  return dt.subtract(const Duration(hours: 3));
+  // Only apply the UTC-3 correction when the string has a time component.
+  final hasTime = bare.contains('T') || (bare.contains(' ') && bare.contains(':'));
+  return hasTime ? dt.subtract(const Duration(hours: 3)) : dt;
 }

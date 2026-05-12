@@ -29,10 +29,15 @@ class ApiConstants {
   static const String playersCreate                = '/api/Players';
   static String groupPlayers(String groupId)       => '/api/Players/group/$groupId';
   static String playerOps(String id)               => '/api/Players/$id';
-  static String playerLeaveGroup(String id)        => '/api/Players/$id/leave-group';
+  static String playerLeaveGroup(String id)         => '/api/players/$id/leave';
+  static String playerRemoveFromGroup(String id)   => '/api/Players/$id/remove-from-group';
 
   // Group invites
-  static const String groupInvites                 = '/api/GroupInvites';
+  static String groupInvites(String groupId)          => '/api/Groups/$groupId/invites';
+  static const String myGroupInvites                  = '/api/Groups/invites/mine';
+  static const String myGroupInvitesCount             = '/api/Groups/invites/mine/count';
+  static String groupInviteAccept(String inviteId)    => '/api/Groups/invites/$inviteId/accept';
+  static String groupInviteReject(String inviteId)    => '/api/Groups/invites/$inviteId/reject';
 
   // Users – search (paginated)
   static String usersListSearch(String q, int pageSize) =>
@@ -75,6 +80,16 @@ class ApiConstants {
   // Payments – resumo
   static String myPaymentSummary(String groupId) =>
       '/api/groups/$groupId/payments/my';
+  static String myPendingItems(String groupId) =>
+      '/api/groups/$groupId/payments/my-pending-items';
+  static String paySelected(String groupId) =>
+      '/api/groups/$groupId/payments/pay-selected';
+  static String initiateMonth(String groupId, int year, int month) =>
+      '/api/groups/$groupId/payments/monthly/$year/$month/initiate';
+  static String isMonthInitiated(String groupId, int year, int month) =>
+      '/api/groups/$groupId/payments/monthly/$year/$month/is-initiated';
+  static String paymentSummaryByPlayer(String groupId, String playerId) =>
+      '/api/groups/$groupId/payments/summary/$playerId';
 
   // Calendar
   static String calendarEvents(String groupId, String start, String end) =>
@@ -89,9 +104,9 @@ class ApiConstants {
       '/api/Calendar/group/$groupId/categories/$id';
 
   // Users – mutations
-  static String changePassword(String id) => '/api/Users/$id/change-password';
-  static String deactivateUser(String id)  => '/api/Users/$id/deactivate';
-  static String activateUser(String id)    => '/api/Users/$id/activate';
+  static String changePassword(String id) => '/api/users/$id/password';
+  static String deactivateUser(String id)  => '/api/users/$id/inactivate';
+  static String activateUser(String id)    => '/api/users/$id/reactivate';
 
   // Group settings (separate resource from group detail)
   static String groupSettings(String groupId) => '/api/GroupSettings/group/$groupId';
@@ -140,8 +155,8 @@ class ApiConstants {
   static String matchAcceptation(String groupId, String id) => '/api/Matches/group/$groupId/$id/acceptation';
   static String matchMatchmaking(String groupId, String id) => '/api/Matches/group/$groupId/$id/matchmaking';
   static String matchPostgame(String groupId, String id)    => '/api/Matches/group/$groupId/$id/postgame';
-  static String matchAccept(String groupId, String id)   => '/api/Matches/group/$groupId/$id/accept';
-  static String matchReject(String groupId, String id)   => '/api/Matches/group/$groupId/$id/reject';
+  static String matchAccept(String groupId, String id)   => '/api/matches/group/$groupId/$id/my-invite/accept';
+  static String matchReject(String groupId, String id)   => '/api/matches/group/$groupId/$id/my-invite/reject';
   static String matchColors(String groupId, String id)   => '/api/Matches/group/$groupId/$id/colors';
   static String matchStart(String groupId, String id)    => '/api/Matches/group/$groupId/$id/start';
   static String matchEnd(String groupId, String id)      => '/api/Matches/group/$groupId/$id/end';
@@ -155,10 +170,10 @@ class ApiConstants {
   static String matchFinalize(String groupId, String id) => '/api/Matches/group/$groupId/$id/finalize';
   static String matchRewind(String groupId, String id)   => '/api/Matches/group/$groupId/$id/rewind';
   static String matchGoToMatchmaking(String groupId, String id) =>
-      '/api/Matches/group/$groupId/$id/go-to-matchmaking';
+      '/api/matches/group/$groupId/$id/matchmaking';
   static String matchGoToPostGame(String groupId, String id) =>
-      '/api/Matches/group/$groupId/$id/go-to-post-game';
-  static String matchGuest(String groupId, String id)    => '/api/Matches/group/$groupId/$id/guest';
+      '/api/matches/group/$groupId/$id/postgame';
+  static String matchGuest(String groupId, String id)    => '/api/matches/group/$groupId/$id/guests';
   static String matchPlayerRole(String groupId, String id, String mpId) =>
       '/api/Matches/group/$groupId/$id/players/$mpId/role';
 
@@ -170,7 +185,51 @@ class ApiConstants {
 
   // TeamGeneration
   static const String teamGenGenerate = '/api/TeamGeneration/generate';
+  static String teamGenSpotlight(String groupId) =>
+      '/api/TeamGeneration/spotlight/$groupId';
+  static String playerHistory(String groupId) =>
+      '/api/Matches/group/$groupId/player-history';
+
+  // Match card (share image)
+  static String matchCard(String groupId) =>
+      '/api/MatchCard/group/$groupId/generate';
+
+  // Match extras
+  static String matchBulkGoals(String groupId, String id) =>
+      '/api/Matches/group/$groupId/$id/goals/bulk';
+  static String matchReapplyMvp(String groupId, String id) =>
+      '/api/Matches/group/$groupId/$id/reapply-mvp';
+  static String matchPublishEvent(String groupId, String id) =>
+      '/api/Matches/group/$groupId/$id/events';
+  static String matchReplays(String groupId, String id) =>
+      '/api/Matches/group/$groupId/$id/replays';
+  static String allGroupReplays(String groupId) =>
+      '/api/Matches/group/$groupId/replays/all';
+  static String myLikedReplays(String groupId) =>
+      '/api/Matches/group/$groupId/replays/my-likes';
+  static String myFavoriteReplays(String groupId) =>
+      '/api/Matches/group/$groupId/replays/my-favorites';
+  static String replayLike(String groupId, String clipId) =>
+      '/api/Matches/group/$groupId/replays/$clipId/like';
+  static String replayFavorite(String groupId, String clipId) =>
+      '/api/Matches/group/$groupId/replays/$clipId/favorite';
+  static String replayStream(String groupId, String clipId) =>
+      '/api/Matches/group/$groupId/replays/$clipId/stream';
+  static String replayDelete(String groupId, String clipId) =>
+      '/api/Matches/group/$groupId/replays/$clipId';
+
+  // Polls – show votes toggle
+  static String pollShowVotes(String groupId, String pollId) =>
+      '/api/Polls/group/$groupId/$pollId/show-votes';
+  static String pollDeadline(String groupId, String pollId) =>
+      '/api/Polls/group/$groupId/$pollId/deadline';
 
   // Push Notifications
   static const String pushRegisterToken = '/api/push/register-token';
+
+  // Notifications inbox
+  static const String myNotifications            = '/api/Notifications/mine';
+  static const String myNotificationsUnreadCount = '/api/Notifications/mine/unread-count';
+  static String notificationMarkRead(String id)  => '/api/Notifications/$id/read';
+  static const String notificationsMarkAllRead   = '/api/Notifications/mine/read-all';
 }

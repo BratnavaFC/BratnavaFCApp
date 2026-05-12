@@ -71,8 +71,10 @@ class AuthNotifier extends AsyncNotifier<void> {
       final dataSource = ref.read(_authDataSourceProvider);
 
       // Busca em paralelo: roles de grupo + grupos do jogador.
-      final roles    = await dataSource.fetchGroupRoles(account.userId);
-      final groupIds = await dataSource.fetchMyGroupIds();
+      final (roles, groupIds) = await (
+        dataSource.fetchGroupRoles(account.userId),
+        dataSource.fetchMyGroupIds(),
+      ).wait;
 
       // Auto-seleciona o grupo se o usuário pertencer a apenas um.
       final activeGroupId = groupIds.length == 1 ? groupIds.first : null;
@@ -85,6 +87,9 @@ class AuthNotifier extends AsyncNotifier<void> {
       );
 
       await ref.read(accountStoreProvider.notifier).upsertAccount(enriched);
+
+      // Reseta o guard de 401 para que futuros erros sejam tratados normalmente.
+      ref.read(authInterceptorProvider).resetUnauthorizedGuard();
     });
   }
 

@@ -18,6 +18,9 @@ class AuthInterceptor extends Interceptor {
   /// Serialises concurrent refresh attempts — all callers await the same Future.
   Future<String?>? _pendingRefresh;
 
+  /// Prevents onUnauthorized from being called more than once per session.
+  bool _isHandlingUnauthorized = false;
+
   AuthInterceptor({
     required this.getAccessToken,
     required this.getRefreshToken,
@@ -57,6 +60,12 @@ class AuthInterceptor extends Interceptor {
     ErrorInterceptorHandler handler,
   ) async {
     if (err.response?.statusCode == 401) {
+      // If already handling unauthorized (e.g. logout in progress), just reject
+      // this request silently — do NOT call onUnauthorized again.
+      if (_isHandlingUnauthorized) {
+        return handler.reject(err);
+      }
+
       final newAccess = await _tryRefresh();
       if (newAccess != null) {
         // Retry original request with new token.
@@ -67,10 +76,19 @@ class AuthInterceptor extends Interceptor {
           return handler.resolve(cloned);
         } catch (_) {}
       }
-      await onUnauthorized();
+
+      // Refresh failed — trigger logout exactly once.
+      if (!_isHandlingUnauthorized) {
+        _isHandlingUnauthorized = true;
+        await onUnauthorized();
+      }
+      return handler.reject(err);
     }
     handler.next(err);
   }
+
+  /// Resets the unauthorized guard — call this after a successful login.
+  void resetUnauthorizedGuard() => _isHandlingUnauthorized = false;
 
   /// Public entry-point used by proactive refresh outside the interceptor.
   /// Shares the same mutex as in-flight interceptor refresh calls.

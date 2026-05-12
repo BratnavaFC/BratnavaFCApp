@@ -1,0 +1,85 @@
+// ── Spotlight player (top-N slot) ─────────────────────────────────────────────
+
+class SpotlightPlayer {
+  final String playerId;
+  final String playerName;
+  final int    goals;
+  final int    assists;
+  final int    mvpCount;
+  final int    matchCount;
+  final double winRate; // 0–1 fraction
+
+  const SpotlightPlayer({
+    required this.playerId,
+    required this.playerName,
+    this.goals      = 0,
+    this.assists    = 0,
+    this.mvpCount   = 0,
+    this.matchCount = 0,
+    this.winRate    = 0,
+  });
+
+  factory SpotlightPlayer.fromJson(Map<String, dynamic> j) => SpotlightPlayer(
+    playerId:   (j['playerId']   ?? '') as String,
+    playerName: (j['playerName'] ?? '') as String,
+    goals:      (j['goals']      as num?)?.toInt() ?? 0,
+    assists:    (j['assists']    as num?)?.toInt() ?? 0,
+    mvpCount:   (j['mvpCount']   as num?)?.toInt() ?? 0,
+    matchCount: (j['matchCount'] as num?)?.toInt() ?? 0,
+    winRate:    (j['winRate']    as num?)?.toDouble() ?? 0,
+  );
+}
+
+// ── Full report ───────────────────────────────────────────────────────────────
+
+class PlayerSpotlightReport {
+  final SpotlightPlayer? topScorer;
+  final SpotlightPlayer? topAssist;
+  final SpotlightPlayer? topMvp;
+  final SpotlightPlayer? bestWinRate;
+  final List<SpotlightPlayer> players;
+
+  const PlayerSpotlightReport({
+    this.topScorer,
+    this.topAssist,
+    this.topMvp,
+    this.bestWinRate,
+    this.players = const [],
+  });
+
+  bool get isEmpty =>
+      topScorer == null &&
+      topAssist == null &&
+      topMvp == null &&
+      bestWinRate == null &&
+      players.isEmpty;
+
+  factory PlayerSpotlightReport.fromJson(Map<String, dynamic> json) {
+    // Unwrap { data: { ... } } envelope if present
+    final j = (json['data'] is Map<String, dynamic>)
+        ? json['data'] as Map<String, dynamic>
+        : json;
+
+    SpotlightPlayer? parseSlot(String key) {
+      final raw = j[key];
+      if (raw is! Map<String, dynamic>) return null;
+      return SpotlightPlayer.fromJson(raw);
+    }
+
+    final rawPlayers = j['players'];
+    final players = rawPlayers is List
+        ? rawPlayers
+            .whereType<Map<String, dynamic>>()
+            .map(SpotlightPlayer.fromJson)
+            .toList()
+        : <SpotlightPlayer>[];
+
+    return PlayerSpotlightReport(
+      topScorer:   parseSlot('topScorer'),
+      topAssist:   parseSlot('topAssist'),
+      topMvp:      parseSlot('topMvp'),
+      bestWinRate: parseSlot('bestWinRate'),
+      players:     players,
+    );
+  }
+}

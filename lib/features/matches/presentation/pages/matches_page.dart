@@ -134,6 +134,34 @@ class _MatchesPageState extends ConsumerState<MatchesPage> {
     }
   }
 
+  // ── Voltar etapa (com confirmação) ───────────────────────────────────────
+  Future<void> _rewindStep() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Voltar etapa'),
+        content: const Text(
+          'Tem certeza que deseja voltar para a etapa anterior? '
+          'Esta ação não pode ser desfeita.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.amber500),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Voltar etapa'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      await ref.read(matchNotifierProvider.notifier).rewindStep();
+    }
+  }
+
   // ── UI ────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
@@ -161,7 +189,10 @@ class _MatchesPageState extends ConsumerState<MatchesPage> {
       children: [
         _MatchBanner(
           s:         s,
+          isAdmin:   isAdmin,
+          canRewind: isAdmin && s.hasMatch && s.canRewind,
           onRefresh: () => ref.read(matchNotifierProvider.notifier).refresh(),
+          onRewind:  _rewindStep,
         ),
         MatchStepperHeader(
           currentStep: currentStep,
@@ -190,8 +221,18 @@ class _MatchesPageState extends ConsumerState<MatchesPage> {
 
 class _MatchBanner extends StatelessWidget {
   final MatchState s;
+  final bool isAdmin;
+  final bool canRewind;
   final VoidCallback onRefresh;
-  const _MatchBanner({required this.s, required this.onRefresh});
+  final VoidCallback onRewind;
+
+  const _MatchBanner({
+    required this.s,
+    required this.isAdmin,
+    required this.canRewind,
+    required this.onRefresh,
+    required this.onRewind,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -218,6 +259,44 @@ class _MatchBanner extends StatelessWidget {
               ],
             ),
           ),
+          // ── Botão Voltar etapa (só admin com partida ativa) ──────────────
+          if (isAdmin && s.hasMatch) ...[
+            Tooltip(
+              message: canRewind ? 'Voltar uma etapa' : 'Não é possível voltar neste status',
+              child: TextButton.icon(
+                onPressed: canRewind ? onRewind : null,
+                style: TextButton.styleFrom(
+                  foregroundColor: canRewind ? AppColors.amber400 : AppColors.slate600,
+                  backgroundColor: canRewind
+                      ? AppColors.amber500.withValues(alpha: 0.15)
+                      : Colors.transparent,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    side: BorderSide(
+                      color: canRewind
+                          ? AppColors.amber400.withValues(alpha: 0.4)
+                          : AppColors.slate700,
+                    ),
+                  ),
+                ),
+                icon: Icon(Icons.undo_rounded, size: 15,
+                    color: canRewind ? AppColors.amber400 : AppColors.slate600),
+                label: Text(
+                  'Voltar etapa',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: canRewind ? AppColors.amber400 : AppColors.slate600,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+          ],
+          // ── Refresh ──────────────────────────────────────────────────────
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white, size: 20),
             onPressed: onRefresh,

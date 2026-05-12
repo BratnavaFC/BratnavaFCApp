@@ -4,7 +4,6 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../auth/presentation/providers/account_store.dart';
 import '../../domain/entities/match_models.dart';
 import '../providers/match_provider.dart';
-import '../widgets/match_stepper_header.dart';
 import '../widgets/team_column_card.dart';
 import 'step4_jogo_page.dart';
 
@@ -87,7 +86,6 @@ class _Step3State extends ConsumerState<Step3MatchmakingPage> {
       ),
       body: Column(
         children: [
-          MatchStepperHeader(currentStep: MatchStep.teams),
           Expanded(
             child: RefreshIndicator(
               onRefresh: () => ref.read(matchNotifierProvider.notifier).refresh(),

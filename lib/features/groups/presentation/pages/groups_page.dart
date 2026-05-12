@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -26,6 +26,10 @@ class _PlayerDto {
   final bool isGuest;
   final int status;
   final int? guestStarRating;
+  // mensalista ratings
+  final int? attackRating;
+  final int? defenseRating;
+  final int? overallRating;   // displayed as "Físico"
 
   const _PlayerDto({
     required this.id,
@@ -37,7 +41,20 @@ class _PlayerDto {
     required this.isGuest,
     required this.status,
     this.guestStarRating,
+    this.attackRating,
+    this.defenseRating,
+    this.overallRating,
   });
+
+  /// Computed overall: average of the three ratings, or null if none set.
+  double? get computedOverall {
+    final a = attackRating;
+    final d = defenseRating;
+    final o = overallRating;
+    if (a == null && d == null && o == null) return null;
+    final vals = [if (a != null) a, if (d != null) d, if (o != null) o];
+    return vals.reduce((x, y) => x + y) / vals.length;
+  }
 
   factory _PlayerDto.fromJson(Map<String, dynamic> j) => _PlayerDto(
         id: j['id'] as String? ?? '',
@@ -49,6 +66,9 @@ class _PlayerDto {
         isGuest: j['isGuest'] as bool? ?? false,
         status: j['status'] as int? ?? 1,
         guestStarRating: j['guestStarRating'] as int?,
+        attackRating:  j['attackRating']  as int?,
+        defenseRating: j['defenseRating'] as int?,
+        overallRating: j['overallRating'] as int?,
       );
 }
 
@@ -176,6 +196,7 @@ class _GroupsPageState extends ConsumerState<GroupsPage> {
 
   static dynamic _unwrap(dynamic data) {
     if (data is Map && data.containsKey('data')) return data['data'];
+    if (data is Map && data.containsKey('Data')) return data['Data'];
     return data;
   }
 
@@ -422,6 +443,7 @@ class _GroupsPageState extends ConsumerState<GroupsPage> {
         dio: _dio,
         groupId: groupId,
         existingUserIds: _existingUserIds,
+        guestPlayers: _guestPlayers,
         onInvited: () async => _reloadGroup(),
       ),
     );
@@ -442,6 +464,13 @@ class _GroupsPageState extends ConsumerState<GroupsPage> {
           await _dio.put(ApiConstants.playerOps(player.id), data: dto);
           _reloadGroup();
         },
+        // Remove available for admins on non-guest players with a linked account
+        onRemove: (isAdminHere && !player.isGuest && player.userId != null)
+            ? () async {
+                await _dio.post(ApiConstants.playerRemoveFromGroup(player.id));
+                _reloadGroup();
+              }
+            : null,
       ),
     );
   }
@@ -1145,7 +1174,7 @@ class _SmallBtn extends StatelessWidget {
 // Group Content
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _GroupContent extends StatelessWidget {
+class _GroupContent extends StatefulWidget {
   final _GroupDto? group;
   final bool groupLoading;
   final String? groupError;
@@ -1175,7 +1204,27 @@ class _GroupContent extends StatelessWidget {
   });
 
   @override
+  State<_GroupContent> createState() => _GroupContentState();
+}
+
+class _GroupContentState extends State<_GroupContent> {
+  int _tab = 0; // 0 = Jogadores, 1 = Avaliações
+
+  @override
   Widget build(BuildContext context) {
+    final group          = widget.group;
+    final groupLoading   = widget.groupLoading;
+    final groupError     = widget.groupError;
+    final activePlayers  = widget.activePlayers;
+    final guestPlayers   = widget.guestPlayers;
+    final inactivePlayers= widget.inactivePlayers;
+    final activePlayerId = widget.activePlayerId;
+    final isAdminHere    = widget.isAdminHere;
+    final isFinanceiroHere = widget.isFinanceiroHere;
+    final paymentMap     = widget.paymentMap;
+    final isDark         = widget.isDark;
+    final onEditPlayer   = widget.onEditPlayer;
+
     if (groupError != null) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -1190,7 +1239,7 @@ class _GroupContent extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                groupError!,
+                groupError,
                 style: const TextStyle(fontSize: 13, color: Color(0xFFBE123C)),
               ),
             ),
@@ -1245,74 +1294,757 @@ class _GroupContent extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (activePlayers.isEmpty)
-          Text(
-            'Nenhum mensalista ativo.',
-            style: TextStyle(
-              fontSize: 14,
-              fontStyle: FontStyle.italic,
-              color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
-            ),
-          )
-        else
-          _PlayerSection(
-            label: 'Mensalistas',
-            count: activePlayers.length,
-            iconData: Icons.check,
-            badgeBg: const Color(0xFF10B981),
-            badgeTextColor: const Color(0xFF065F46),
-            badgeLabelBg: const Color(0xFFD1FAE5),
-            players: activePlayers,
-            activePlayerId: activePlayerId,
-            isAdminHere: isAdminHere,
-            isFinanceiroHere: isFinanceiroHere,
-            paymentMap: paymentMap,
-            dim: false,
+        // ── Tab bar (admin only) ─────────────────────────────────────
+        if (isAdminHere) ...[
+          _GroupTabBar(
+            tab:    _tab,
             isDark: isDark,
-            onEdit: onEditPlayer,
+            onTab:  (t) => setState(() => _tab = t),
           ),
-        if (guestPlayers.isNotEmpty) ...[
-          const SizedBox(height: 20),
-          _PlayerSection(
-            label: 'Convidados',
-            count: guestPlayers.length,
-            iconData: Icons.person_add_alt_1_outlined,
-            badgeBg: const Color(0xFFF59E0B),
-            badgeTextColor: const Color(0xFF92400E),
-            badgeLabelBg: const Color(0xFFFEF3C7),
-            players: guestPlayers,
-            activePlayerId: activePlayerId,
-            isAdminHere: isAdminHere,
-            isFinanceiroHere: isFinanceiroHere,
-            paymentMap: paymentMap,
-            dim: false,
-            isDark: isDark,
-            onEdit: onEditPlayer,
-          ),
+          const SizedBox(height: 16),
         ],
-        if (inactivePlayers.isNotEmpty) ...[
-          const SizedBox(height: 20),
-          _PlayerSection(
-            label: 'Inativos',
-            count: inactivePlayers.length,
-            iconData: Icons.close,
-            badgeBg: const Color(0xFF94A3B8),
-            badgeTextColor: isDark
-                ? const Color(0xFFCBD5E1)
-                : const Color(0xFF64748B),
-            badgeLabelBg:
-                isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9),
-            players: inactivePlayers,
+
+        // ── Tab content ──────────────────────────────────────────────
+        if (_tab == 0 || !isAdminHere) ...[
+          if (activePlayers.isEmpty)
+            Text(
+              'Nenhum mensalista ativo.',
+              style: TextStyle(
+                fontSize: 14,
+                fontStyle: FontStyle.italic,
+                color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+              ),
+            )
+          else
+            _PlayerSection(
+              label: 'Mensalistas',
+              count: activePlayers.length,
+              iconData: Icons.check,
+              badgeBg: const Color(0xFF10B981),
+              badgeTextColor: const Color(0xFF065F46),
+              badgeLabelBg: const Color(0xFFD1FAE5),
+              players: activePlayers,
+              activePlayerId: activePlayerId,
+              isAdminHere: isAdminHere,
+              isFinanceiroHere: isFinanceiroHere,
+              paymentMap: paymentMap,
+              dim: false,
+              isDark: isDark,
+              onEdit: onEditPlayer,
+            ),
+          if (guestPlayers.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            _PlayerSection(
+              label: 'Convidados',
+              count: guestPlayers.length,
+              iconData: Icons.person_add_alt_1_outlined,
+              badgeBg: const Color(0xFFF59E0B),
+              badgeTextColor: const Color(0xFF92400E),
+              badgeLabelBg: const Color(0xFFFEF3C7),
+              players: guestPlayers,
+              activePlayerId: activePlayerId,
+              isAdminHere: isAdminHere,
+              isFinanceiroHere: isFinanceiroHere,
+              paymentMap: paymentMap,
+              dim: false,
+              isDark: isDark,
+              onEdit: onEditPlayer,
+            ),
+          ],
+          if (inactivePlayers.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            _PlayerSection(
+              label: 'Inativos',
+              count: inactivePlayers.length,
+              iconData: Icons.close,
+              badgeBg: const Color(0xFF94A3B8),
+              badgeTextColor: isDark
+                  ? const Color(0xFFCBD5E1)
+                  : const Color(0xFF64748B),
+              badgeLabelBg:
+                  isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9),
+              players: inactivePlayers,
+              activePlayerId: activePlayerId,
+              isAdminHere: isAdminHere,
+              isFinanceiroHere: isFinanceiroHere,
+              paymentMap: paymentMap,
+              dim: true,
+              isDark: isDark,
+              onEdit: onEditPlayer,
+            ),
+          ],
+        ] else ...[
+          _RatingsTab(
+            players: [...activePlayers, ...guestPlayers],
             activePlayerId: activePlayerId,
             isAdminHere: isAdminHere,
-            isFinanceiroHere: isFinanceiroHere,
-            paymentMap: paymentMap,
-            dim: true,
             isDark: isDark,
             onEdit: onEditPlayer,
           ),
         ],
       ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Group Tab Bar
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _GroupTabBar extends StatelessWidget {
+  final int          tab;
+  final bool         isDark;
+  final void Function(int) onTab;
+
+  const _GroupTabBar({
+    required this.tab,
+    required this.isDark,
+    required this.onTab,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          _GroupTab(
+            label:  'Jogadores',
+            icon:   Icons.group_outlined,
+            active: tab == 0,
+            isDark: isDark,
+            onTap:  () => onTab(0),
+          ),
+          _GroupTab(
+            label:  'Avaliações',
+            icon:   Icons.star_rounded,
+            active: tab == 1,
+            isDark: isDark,
+            onTap:  () => onTab(1),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GroupTab extends StatelessWidget {
+  final String   label;
+  final IconData icon;
+  final bool     active;
+  final bool     isDark;
+  final VoidCallback onTap;
+
+  const _GroupTab({
+    required this.label,
+    required this.icon,
+    required this.active,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: active
+                ? (isDark ? const Color(0xFF334155) : Colors.white)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: active && !isDark
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size:  15,
+                color: active
+                    ? (isDark ? Colors.white : const Color(0xFF0F172A))
+                    : (isDark
+                        ? const Color(0xFF64748B)
+                        : const Color(0xFF94A3B8)),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize:   13,
+                  fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                  color: active
+                      ? (isDark ? Colors.white : const Color(0xFF0F172A))
+                      : (isDark
+                          ? const Color(0xFF64748B)
+                          : const Color(0xFF94A3B8)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Ratings Tab
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _RatingsTab extends StatefulWidget {
+  final List<_PlayerDto>          players;
+  final String                    activePlayerId;
+  final bool                      isAdminHere;
+  final bool                      isDark;
+  final void Function(_PlayerDto) onEdit;
+
+  const _RatingsTab({
+    required this.players,
+    required this.activePlayerId,
+    required this.isAdminHere,
+    required this.isDark,
+    required this.onEdit,
+  });
+
+  @override
+  State<_RatingsTab> createState() => _RatingsTabState();
+}
+
+class _RatingsTabState extends State<_RatingsTab> {
+  // 0=Overall, 1=Ataque, 2=Defesa, 3=Físico
+  int _sortBy = 0;
+
+  double? _sortValue(_PlayerDto p) {
+    switch (_sortBy) {
+      case 1:  return p.attackRating?.toDouble();
+      case 2:  return p.defenseRating?.toDouble();
+      case 3:  return p.overallRating?.toDouble();
+      default: return p.computedOverall;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark      = widget.isDark;
+    final mensalistas = widget.players.where((p) => !p.isGuest).toList();
+    final guests      = widget.players.where((p) =>  p.isGuest).toList();
+
+    mensalistas.sort((a, b) {
+      final va = _sortValue(a);
+      final vb = _sortValue(b);
+      if (va == null && vb == null) return a.name.compareTo(b.name);
+      if (va == null) return  1;
+      if (vb == null) return -1;
+      return vb.compareTo(va);
+    });
+
+    guests.sort((a, b) {
+      final ra = a.guestStarRating ?? -1;
+      final rb = b.guestStarRating ?? -1;
+      return rb.compareTo(ra);
+    });
+
+    if (mensalistas.isEmpty && guests.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 40),
+        child: Column(
+          children: [
+            Icon(Icons.bar_chart_rounded, size: 36,
+                color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8)),
+            const SizedBox(height: 8),
+            Text('Nenhum jogador ainda.',
+                style: TextStyle(fontSize: 14,
+                    color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8))),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // ── Sort filter bar ──────────────────────────────────────────
+        if (mensalistas.isNotEmpty) ...[
+          _RatingsSortBar(
+            sortBy: _sortBy,
+            isDark: isDark,
+            onSort: (s) => setState(() => _sortBy = s),
+          ),
+          const SizedBox(height: 12),
+        ],
+
+        // ── Mensalistas ──────────────────────────────────────────────
+        if (mensalistas.isNotEmpty) ...[
+          _RatingSectionHeader(
+            icon:      Icons.sports_soccer_rounded,
+            iconColor: const Color(0xFF3B82F6),
+            label:     'MENSALISTAS',
+            count:     mensalistas.length,
+            countBg:   isDark ? const Color(0xFF1E3A5F) : const Color(0xFFEFF6FF),
+            countFg:   const Color(0xFF1D4ED8),
+            isDark:    isDark,
+          ),
+          const SizedBox(height: 8),
+          ...mensalistas.asMap().entries.map((e) => _RatingRow(
+            rank:        e.key + 1,
+            player:      e.value,
+            sortBy:      _sortBy,
+            isMe:        e.value.id == widget.activePlayerId,
+            isAdminHere: widget.isAdminHere,
+            isDark:      isDark,
+            onEdit:      widget.onEdit,
+          )),
+        ],
+
+        // ── Convidados ───────────────────────────────────────────────
+        if (guests.isNotEmpty) ...[
+          if (mensalistas.isNotEmpty) const SizedBox(height: 20),
+          _RatingSectionHeader(
+            icon:      Icons.star_rounded,
+            iconColor: const Color(0xFFF59E0B),
+            label:     'CONVIDADOS',
+            count:     guests.length,
+            countBg:   isDark ? const Color(0xFF3D2B00) : const Color(0xFFFEF3C7),
+            countFg:   const Color(0xFF92400E),
+            isDark:    isDark,
+          ),
+          const SizedBox(height: 8),
+          ...guests.asMap().entries.map((e) => _StarRow(
+            rank:        e.key + 1,
+            player:      e.value,
+            isMe:        e.value.id == widget.activePlayerId,
+            isAdminHere: widget.isAdminHere,
+            isDark:      isDark,
+            onEdit:      widget.onEdit,
+          )),
+        ],
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Ratings Sort Bar
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _RatingsSortBar extends StatelessWidget {
+  final int  sortBy;
+  final bool isDark;
+  final void Function(int) onSort;
+
+  const _RatingsSortBar({
+    required this.sortBy,
+    required this.isDark,
+    required this.onSort,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const tabs = [
+      ('⭐', 'Overall'),
+      ('⚔️', 'Ataque'),
+      ('🛡️', 'Defesa'),
+      ('💪', 'Físico'),
+    ];
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: List.generate(tabs.length, (i) {
+          final active = sortBy == i;
+          return Padding(
+            padding: EdgeInsets.only(right: i < tabs.length - 1 ? 6 : 0),
+            child: GestureDetector(
+              onTap: () => onSort(i),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: active
+                      ? (isDark ? const Color(0xFF334155) : const Color(0xFF0F172A))
+                      : (isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9)),
+                  borderRadius: BorderRadius.circular(100),
+                  border: Border.all(
+                    color: active
+                        ? Colors.transparent
+                        : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(tabs[i].$1, style: const TextStyle(fontSize: 12)),
+                    const SizedBox(width: 4),
+                    Text(
+                      tabs[i].$2,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: active
+                            ? Colors.white
+                            : (isDark
+                                ? const Color(0xFF94A3B8)
+                                : const Color(0xFF64748B)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+}
+
+class _RatingSectionHeader extends StatelessWidget {
+  final IconData icon;
+  final Color    iconColor;
+  final String   label;
+  final int      count;
+  final Color    countBg;
+  final Color    countFg;
+  final bool     isDark;
+
+  const _RatingSectionHeader({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    required this.count,
+    required this.countBg,
+    required this.countFg,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 20, height: 20,
+          decoration: BoxDecoration(
+            color: iconColor.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Icon(icon, size: 12, color: iconColor),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.8,
+            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(
+            color: countBg, borderRadius: BorderRadius.circular(100),
+          ),
+          child: Text('$count',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: countFg)),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Row for mensalistas: shows attack / defense / physical ratings ─────────────
+
+class _RatingRow extends StatelessWidget {
+  final int            rank;
+  final _PlayerDto     player;
+  final int            sortBy;   // 0=Overall 1=Ataque 2=Defesa 3=Físico
+  final bool           isMe;
+  final bool           isAdminHere;
+  final bool           isDark;
+  final void Function(_PlayerDto) onEdit;
+
+  const _RatingRow({
+    required this.rank,
+    required this.player,
+    required this.sortBy,
+    required this.isMe,
+    required this.isAdminHere,
+    required this.isDark,
+    required this.onEdit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final overall = player.computedOverall;
+    final atk     = player.attackRating;
+    final def     = player.defenseRating;
+    final phys    = player.overallRating;
+    final hasAny  = overall != null;
+
+    Color rankBg = isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9);
+    Color rankFg = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+    if (hasAny) {
+      if (rank == 1)      { rankBg = const Color(0xFFFBBF24); rankFg = const Color(0xFF78350F); }
+      else if (rank == 2) { rankBg = const Color(0xFFCBD5E1); rankFg = const Color(0xFF334155); }
+      else if (rank == 3) { rankBg = const Color(0xFFFDBA74); rankFg = const Color(0xFF7C2D12); }
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: isMe
+            ? (isDark ? const Color(0xFF0C2A20) : const Color(0xFFECFDF5))
+            : (isDark ? const Color(0xFF0F172A) : Colors.white),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isMe
+              ? const Color(0xFF6EE7B7)
+              : (isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFE2E8F0)),
+          width: isMe ? 1.5 : 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 28, height: 28,
+                decoration: BoxDecoration(color: rankBg, borderRadius: BorderRadius.circular(8)),
+                alignment: Alignment.center,
+                child: Text(
+                  hasAny ? '$rank' : '—',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: rankFg),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  player.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14, fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (hasAny)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    overall.toStringAsFixed(1),
+                    style: TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    ),
+                  ),
+                )
+              else
+                Text(
+                  'Sem avaliação',
+                  style: TextStyle(
+                    fontSize: 11, fontStyle: FontStyle.italic,
+                    color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1),
+                  ),
+                ),
+              if (isAdminHere) ...[
+                const SizedBox(width: 8),
+                InkWell(
+                  onTap: () => onEdit(player),
+                  borderRadius: BorderRadius.circular(8),
+                  child: SizedBox(
+                    width: 24, height: 24,
+                    child: Icon(Icons.edit_outlined, size: 13,
+                        color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8)),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          if (hasAny) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                const SizedBox(width: 38), // indent under rank badge
+                _RatingChip(
+                  emoji: '⚔️', value: atk,
+                  activeSort: sortBy == 1,
+                  color: const Color(0xFFEF4444), isDark: isDark,
+                ),
+                const SizedBox(width: 6),
+                _RatingChip(
+                  emoji: '🛡️', value: def,
+                  activeSort: sortBy == 2,
+                  color: const Color(0xFF3B82F6), isDark: isDark,
+                ),
+                const SizedBox(width: 6),
+                _RatingChip(
+                  emoji: '💪', value: phys,
+                  activeSort: sortBy == 3,
+                  color: const Color(0xFFF59E0B), isDark: isDark,
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _RatingChip extends StatelessWidget {
+  final String emoji;
+  final int?   value;
+  final bool   activeSort;
+  final Color  color;
+  final bool   isDark;
+
+  const _RatingChip({
+    required this.emoji,
+    required this.value,
+    required this.activeSort,
+    required this.color,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: activeSort
+            ? color.withValues(alpha: 0.15)
+            : (isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC)),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: activeSort
+              ? color.withValues(alpha: 0.35)
+              : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(emoji, style: const TextStyle(fontSize: 11)),
+          const SizedBox(width: 3),
+          Text(
+            value != null ? '$value' : '—',
+            style: TextStyle(
+              fontSize: 12, fontWeight: FontWeight.w600,
+              color: activeSort
+                  ? color
+                  : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Row for guests: shows star rating ────────────────────────────────────────
+
+class _StarRow extends StatelessWidget {
+  final int            rank;
+  final _PlayerDto     player;
+  final bool           isMe;
+  final bool           isAdminHere;
+  final bool           isDark;
+  final void Function(_PlayerDto) onEdit;
+
+  const _StarRow({
+    required this.rank,
+    required this.player,
+    required this.isMe,
+    required this.isAdminHere,
+    required this.isDark,
+    required this.onEdit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final rating    = player.guestStarRating;
+    final hasRating = rating != null;
+
+    Color rankBg = isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9);
+    Color rankFg = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+    if (hasRating) {
+      if (rank == 1) { rankBg = const Color(0xFFFBBF24); rankFg = const Color(0xFF78350F); }
+      else if (rank == 2) { rankBg = const Color(0xFFCBD5E1); rankFg = const Color(0xFF334155); }
+      else if (rank == 3) { rankBg = const Color(0xFFFDBA74); rankFg = const Color(0xFF7C2D12); }
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: isMe
+            ? (isDark ? const Color(0xFF0C2A20) : const Color(0xFFECFDF5))
+            : (isDark ? const Color(0xFF0F172A) : Colors.white),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isMe ? const Color(0xFF6EE7B7)
+              : (isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFE2E8F0)),
+          width: isMe ? 1.5 : 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 28, height: 28,
+            decoration: BoxDecoration(color: rankBg, borderRadius: BorderRadius.circular(8)),
+            alignment: Alignment.center,
+            child: Text(hasRating ? '$rank' : '—',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: rankFg)),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(player.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : const Color(0xFF0F172A))),
+          ),
+          const SizedBox(width: 8),
+          if (hasRating)
+            Row(mainAxisSize: MainAxisSize.min, children: List.generate(5, (i) => Text('★',
+                style: TextStyle(fontSize: 14, color: i < rating
+                    ? const Color(0xFFFBBF24)
+                    : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0))))))
+          else
+            Text('Sem avaliação', style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic,
+                color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1))),
+          if (isAdminHere) ...[
+            const SizedBox(width: 8),
+            InkWell(
+              onTap: () => onEdit(player),
+              borderRadius: BorderRadius.circular(8),
+              child: SizedBox(width: 24, height: 24,
+                  child: Icon(Icons.edit_outlined, size: 13,
+                      color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8))),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -2089,6 +2821,96 @@ class _StarRatingWidget extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Rating Slider (mensalistas: 0–10 per category)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _RatingSlider extends StatelessWidget {
+  final String   label;
+  final String   icon;
+  final Color    color;
+  final int?     value;
+  final bool     disabled;
+  final bool     isDark;
+  final ValueChanged<int> onChanged;
+
+  const _RatingSlider({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.value,
+    required this.disabled,
+    required this.isDark,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final displayValue = value ?? 0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Text(icon, style: const TextStyle(fontSize: 16)),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF374151),
+              ),
+            ),
+            const Spacer(),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 120),
+              child: Container(
+                key: ValueKey(displayValue),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                decoration: BoxDecoration(
+                  color: value != null
+                      ? color.withValues(alpha: 0.12)
+                      : (isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9)),
+                  borderRadius: BorderRadius.circular(100),
+                ),
+                child: Text(
+                  value != null ? '$displayValue' : '—',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: value != null
+                        ? color
+                        : (isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8)),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            activeTrackColor:   color,
+            inactiveTrackColor: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+            thumbColor:         color,
+            overlayColor:       color.withValues(alpha: 0.12),
+            trackHeight:        4,
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+          ),
+          child: Slider(
+            value: displayValue.toDouble(),
+            min:   0,
+            max:   10,
+            divisions: 10,
+            onChanged: disabled ? null : (v) => onChanged(v.round()),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Add Guest
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -2233,11 +3055,14 @@ class _EditPlayerSheet extends StatefulWidget {
   final _PlayerDto player;
   final bool isAdmin;
   final Future<void> Function(Map<String, dynamic>) onSaved;
+  /// Called when admin confirms removing the player from the group. Null = feature not available.
+  final Future<void> Function()? onRemove;
 
   const _EditPlayerSheet({
     required this.player,
     required this.isAdmin,
     required this.onSaved,
+    this.onRemove,
   });
 
   @override
@@ -2248,23 +3073,45 @@ class _EditPlayerSheetState extends State<_EditPlayerSheet> {
   late final TextEditingController _nameCtrl;
   late bool _isGuest;
   late bool _isActive;
+  // mensalista ratings (1–10, null = not set)
+  int? _attackRating;
+  int? _defenseRating;
+  int? _overallRating;
+  // guest rating
   int? _starRating;
-  bool _loading = false;
+  bool _loading  = false;
+  bool _removing = false;
+  bool _confirmRemove = false;
   String? _err;
 
   @override
   void initState() {
     super.initState();
-    _nameCtrl = TextEditingController(text: widget.player.name);
-    _isGuest = widget.player.isGuest;
-    _isActive = widget.player.status == 1;
-    _starRating = widget.player.guestStarRating;
+    _nameCtrl      = TextEditingController(text: widget.player.name);
+    _isGuest       = widget.player.isGuest;
+    _isActive      = widget.player.status == 1;
+    _attackRating  = widget.player.attackRating;
+    _defenseRating = widget.player.defenseRating;
+    _overallRating = widget.player.overallRating;
+    _starRating    = widget.player.guestStarRating;
   }
 
   @override
   void dispose() {
     _nameCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _remove() async {
+    setState(() { _removing = true; _err = null; });
+    try {
+      await widget.onRemove!();
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      setState(() { _err = _extractError(e); _confirmRemove = false; });
+    } finally {
+      if (mounted) setState(() => _removing = false);
+    }
   }
 
   Future<void> _save() async {
@@ -2286,10 +3133,14 @@ class _EditPlayerSheetState extends State<_EditPlayerSheet> {
       };
 
       if (widget.isAdmin) {
-        dto['status'] = _isActive ? 1 : 2;
+        dto['status']  = _isActive ? 1 : 2;
         dto['isGuest'] = _isGuest;
-        if (_isGuest && _starRating != null) {
-          dto['guestStarRating'] = _starRating;
+        if (_isGuest) {
+          if (_starRating != null) dto['guestStarRating'] = _starRating;
+        } else {
+          if (_attackRating  != null) dto['attackRating']  = _attackRating;
+          if (_defenseRating != null) dto['defenseRating'] = _defenseRating;
+          if (_overallRating != null) dto['overallRating'] = _overallRating;
         }
       }
 
@@ -2378,9 +3229,49 @@ class _EditPlayerSheetState extends State<_EditPlayerSheet> {
                         ),
                       ],
                     ),
-                    if (_isGuest) ...[
+                    // Avaliação: ratings para mensalistas, estrelas para convidados
+                    if (!_isGuest) ...[
                       const SizedBox(height: 16),
-                      _FieldLabel('Nível estimado', isDark: isDark),
+                      _FieldLabel('Avaliações (1–10)', isDark: isDark),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Defina o nível do jogador em cada categoria',
+                        style: TextStyle(fontSize: 11,
+                            color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8)),
+                      ),
+                      const SizedBox(height: 12),
+                      _RatingSlider(
+                        label:    'Ataque',
+                        icon:     '⚔️',
+                        color:    const Color(0xFFEF4444),
+                        value:    _attackRating,
+                        disabled: _loading,
+                        isDark:   isDark,
+                        onChanged: (v) => setState(() => _attackRating = v),
+                      ),
+                      const SizedBox(height: 8),
+                      _RatingSlider(
+                        label:    'Defesa',
+                        icon:     '🛡️',
+                        color:    const Color(0xFF3B82F6),
+                        value:    _defenseRating,
+                        disabled: _loading,
+                        isDark:   isDark,
+                        onChanged: (v) => setState(() => _defenseRating = v),
+                      ),
+                      const SizedBox(height: 8),
+                      _RatingSlider(
+                        label:    'Físico',
+                        icon:     '💪',
+                        color:    const Color(0xFFF59E0B),
+                        value:    _overallRating,
+                        disabled: _loading,
+                        isDark:   isDark,
+                        onChanged: (v) => setState(() => _overallRating = v),
+                      ),
+                    ] else ...[
+                      const SizedBox(height: 16),
+                      _FieldLabel('Nível estimado (estrelas)', isDark: isDark),
                       const SizedBox(height: 8),
                       _StarRatingWidget(
                         value: _starRating,
@@ -2402,9 +3293,120 @@ class _EditPlayerSheetState extends State<_EditPlayerSheet> {
                   const SizedBox(height: 20),
                   _PrimaryBtn(
                     label: _loading ? 'Salvando...' : 'Salvar',
-                    loading: _loading,
+                    loading: _loading || _removing,
                     onTap: _save,
                   ),
+
+                  // ── Remover da patota (admin + não-guest + tem userId) ──
+                  if (widget.onRemove != null) ...[
+                    const SizedBox(height: 10),
+                    if (!_confirmRemove)
+                      SizedBox(
+                        height: 44,
+                        child: OutlinedButton.icon(
+                          onPressed: (_loading || _removing)
+                              ? null
+                              : () => setState(() => _confirmRemove = true),
+                          icon: const Icon(Icons.person_remove_outlined, size: 15),
+                          label: const Text('Remover da patota'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFFE11D48),
+                            side: const BorderSide(color: Color(0xFFFDA4AF)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                      )
+                    else
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? const Color(0xFF2D0A14)
+                              : const Color(0xFFFFF1F2),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isDark
+                                ? const Color(0xFF9F1239)
+                                : const Color(0xFFFECACA),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.warning_amber_rounded,
+                                    size: 14, color: Color(0xFFE11D48)),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    '${widget.player.name} voltará a ser convidado '
+                                    'e perderá o vínculo com a conta. '
+                                    'O histórico de partidas é preservado.',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Color(0xFFBE123C),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Row(children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: _removing
+                                      ? null
+                                      : () => setState(() => _confirmRemove = false),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(vertical: 10),
+                                    side: BorderSide(
+                                        color: isDark
+                                            ? const Color(0xFF475569)
+                                            : const Color(0xFFCBD5E1)),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                  child: Text(
+                                    'Cancelar',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: isDark
+                                          ? const Color(0xFF94A3B8)
+                                          : const Color(0xFF64748B),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: _removing ? null : _remove,
+                                  icon: _removing
+                                      ? const SizedBox(
+                                          width: 13,
+                                          height: 13,
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2, color: Colors.white),
+                                        )
+                                      : const Icon(Icons.person_remove_outlined,
+                                          size: 13),
+                                  label: Text(_removing ? 'Removendo...' : 'Confirmar'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFFE11D48),
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(vertical: 10),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                ),
+                              ),
+                            ]),
+                          ],
+                        ),
+                      ),
+                  ],
                 ],
               ),
             ),
@@ -2423,12 +3425,14 @@ class _InviteSheet extends StatefulWidget {
   final Dio dio;
   final String groupId;
   final Set<String> existingUserIds;
+  final List<_PlayerDto> guestPlayers;
   final Future<void> Function() onInvited;
 
   const _InviteSheet({
     required this.dio,
     required this.groupId,
     required this.existingUserIds,
+    required this.guestPlayers,
     required this.onInvited,
   });
 
@@ -2503,6 +3507,28 @@ class _InviteSheetState extends State<_InviteSheet> {
   }
 
   Future<void> _invite(_UserResult user) async {
+    // If there are unlinked guests, ask whether to associate this user with one.
+    String? guestPlayerId;
+    if (widget.guestPlayers.isNotEmpty && mounted) {
+      final picked = await showDialog<_PlayerDto?>(
+        context: context,
+        builder: (_) => _LinkGuestDialog(
+          userName: user.fullName.isNotEmpty ? user.fullName : user.userName,
+          guests:   widget.guestPlayers,
+        ),
+      );
+      // null  = dialog dismissed (cancel) → abort invite
+      // _sentinel means "no link, invite as new member"
+      // a _PlayerDto means link to that guest
+      if (picked == _LinkGuestDialog.sentinel) {
+        guestPlayerId = null; // no linking, proceed normally
+      } else if (picked != null) {
+        guestPlayerId = picked.id;
+      } else {
+        return; // user dismissed dialog — do nothing
+      }
+    }
+
     setState(() {
       _loading = true;
       _err = null;
@@ -2510,15 +3536,10 @@ class _InviteSheetState extends State<_InviteSheet> {
 
     try {
       await widget.dio.post(
-        ApiConstants.playersCreate,
+        ApiConstants.groupInvites(widget.groupId),
         data: {
-          'groupId': widget.groupId,
           'userId': user.id,
-          'name': user.fullName.isEmpty ? user.userName : user.fullName,
-          'isGuest': false,
-          'status': 1,
-          'skillPoints': 0,
-          'isGoalkeeper': false,
+          if (guestPlayerId != null) 'guestPlayerId': guestPlayerId,
         },
       );
 
@@ -2715,6 +3736,215 @@ class _InviteSheetState extends State<_InviteSheet> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Link-guest dialog  (shown during invite flow when guests exist)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _LinkGuestDialog extends StatelessWidget {
+  final String            userName;
+  final List<_PlayerDto>  guests;
+
+  /// Sentinel returned when the user chooses "Não vincular".
+  static const _PlayerDto sentinel = _PlayerDto(
+    id: '__no_link__', name: '', skillPoints: 0,
+    isGoalkeeper: false, isGuest: true, status: 0,
+  );
+
+  const _LinkGuestDialog({
+    required this.userName,
+    required this.guests,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg     = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final border = isDark
+        ? Colors.white.withValues(alpha: 0.08)
+        : const Color(0xFFE2E8F0);
+
+    return Dialog(
+      backgroundColor: bg,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // ── Header ──────────────────────────────────────────────
+            Row(
+              children: [
+                Container(
+                  width: 36, height: 36,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.link_rounded,
+                      size: 18, color: Color(0xFFF59E0B)),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Vincular a convidado?',
+                        style: TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w700,
+                          color: isDark ? Colors.white : const Color(0xFF0F172A),
+                        ),
+                      ),
+                      Text(
+                        userName,
+                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark
+                              ? const Color(0xFF94A3B8)
+                              : const Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Deseja associar este usuário a um convidado já existente na patota?',
+              style: TextStyle(
+                fontSize: 13,
+                color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // ── Guest list ───────────────────────────────────────────
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 280),
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: guests.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 6),
+                itemBuilder: (_, i) {
+                  final g = guests[i];
+                  return InkWell(
+                    onTap: () => Navigator.pop(context, g),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? const Color(0xFF0F172A)
+                            : const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: border),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 32, height: 32,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF3C7),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              g.name.isNotEmpty
+                                  ? g.name.characters.first.toUpperCase()
+                                  : '?',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFFD97706),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              g.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 14, fontWeight: FontWeight.w600,
+                                color: isDark
+                                    ? Colors.white
+                                    : const Color(0xFF0F172A),
+                              ),
+                            ),
+                          ),
+                          if (g.isGoalkeeper) ...[
+                            const SizedBox(width: 6),
+                            Icon(Icons.shield_outlined, size: 13,
+                                color: isDark
+                                    ? const Color(0xFF64748B)
+                                    : const Color(0xFF94A3B8)),
+                          ],
+                          const SizedBox(width: 8),
+                          Icon(Icons.chevron_right_rounded, size: 18,
+                              color: isDark
+                                  ? const Color(0xFF475569)
+                                  : const Color(0xFFCBD5E1)),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // ── Actions ──────────────────────────────────────────────
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context, null),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: border),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: Text(
+                      'Cancelar',
+                      style: TextStyle(
+                        color: isDark
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF64748B),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context, sentinel),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0F172A),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: const Text('Não vincular',
+                        style: TextStyle(fontSize: 13)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

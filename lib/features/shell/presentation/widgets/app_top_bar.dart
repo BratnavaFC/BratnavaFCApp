@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/date_utils.dart';
 import '../../../../shared/presentation/widgets/avatar_widget.dart';
 import '../../../auth/domain/entities/account.dart';
 import '../../../auth/presentation/providers/account_store.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../dashboard/domain/entities/my_player.dart';
 import '../../../dashboard/presentation/providers/dashboard_provider.dart';
+import '../../../groups/presentation/providers/group_invites_provider.dart';
+import '../../../notifications/domain/entities/app_notification.dart';
+import '../../../notifications/presentation/providers/notifications_provider.dart';
 
 class AppTopBar extends ConsumerWidget implements PreferredSizeWidget {
   const AppTopBar({super.key});
@@ -87,8 +91,9 @@ class AppTopBar extends ConsumerWidget implements PreferredSizeWidget {
           ),
         ],
       ),
-      // ── RIGHT: botão de usuário ───────────────────────────────────
+      // ── RIGHT: convites + botão de usuário ───────────────────────
       actions: [
+        _NotificationBell(),
         Padding(
           padding: const EdgeInsets.only(right: 12),
           child: _UserMenuButton(
@@ -100,6 +105,390 @@ class AppTopBar extends ConsumerWidget implements PreferredSizeWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ── Sino de notificações ──────────────────────────────────────────────────────
+
+class _NotificationBell extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Tenta o endpoint unificado; fallback para convites de grupo se falhar.
+    final unreadAsync = ref.watch(notifUnreadCountProvider);
+    final fallback    = ref.watch(myGroupInviteCountProvider).valueOrNull ?? 0;
+    final count       = unreadAsync.maybeWhen(
+      data:    (n) => n > 0 ? n : fallback,
+      orElse:  () => fallback,
+    );
+
+    return IconButton(
+      tooltip:  'Notificações',
+      onPressed: () => _openSheet(context, ref),
+      icon: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          const Icon(Icons.notifications_outlined),
+          if (count > 0)
+            Positioned(
+              top: -2, right: -2,
+              child: Container(
+                width: 14, height: 14,
+                decoration: const BoxDecoration(
+                  color: Colors.red, shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  count > 99 ? '99+' : '$count',
+                  style: const TextStyle(
+                    color: Colors.white, fontSize: 8, fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _openSheet(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet<void>(
+      context:            context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => const _NotificationSheet(),
+    );
+  }
+}
+
+// ── Sheet de notificações ─────────────────────────────────────────────────────
+
+class _NotificationSheet extends ConsumerStatefulWidget {
+  const _NotificationSheet();
+
+  @override
+  ConsumerState<_NotificationSheet> createState() => _NotificationSheetState();
+}
+
+class _NotificationSheetState extends ConsumerState<_NotificationSheet> {
+
+  // Optimistic local read-state overlay (id → isRead).
+  final Map<String, bool> _readOverlay = {};
+
+  Future<void> _markRead(AppNotification n) async {
+    if (n.isRead || (_readOverlay[n.id] ?? false)) return;
+    setState(() => _readOverlay[n.id] = true);
+    try {
+      await ref.read(notificationsDsProvider).markRead(n.id);
+      ref.invalidate(notifUnreadCountProvider);
+    } catch (_) {
+      // rollback
+      if (mounted) setState(() => _readOverlay.remove(n.id));
+    }
+  }
+
+  Future<void> _markAllRead(List<AppNotification> notifications) async {
+    for (final n in notifications) {
+      setState(() => _readOverlay[n.id] = true);
+    }
+    try {
+      await ref.read(notificationsDsProvider).markAllRead();
+      ref.invalidate(notifUnreadCountProvider);
+      ref.invalidate(myNotificationsProvider);
+    } catch (_) {
+      if (mounted) setState(() => _readOverlay.clear());
+    }
+  }
+
+  void _navigate(BuildContext ctx, AppNotification n) {
+    _markRead(n);
+    Navigator.pop(ctx);
+    final route = n.actionUrl ?? _defaultRoute(n.type);
+    if (route.isNotEmpty) ctx.push(route);
+  }
+
+  String _defaultRoute(String type) {
+    switch (type.toLowerCase()) {
+      case 'matchinvite':
+      case 'match_invite':  return '/app/matches';
+      case 'groupinvite':
+      case 'group_invite':  return '/app/invites';
+      case 'payment':       return '/app/payments';
+      case 'poll':          return '/app/polls';
+      case 'birthday':      return '/app/birthdays';
+      default:              return '';
+    }
+  }
+
+  IconData _iconFor(String type) {
+    switch (type.toLowerCase()) {
+      case 'matchinvite':
+      case 'match_invite':   return Icons.sports_soccer_rounded;
+      case 'groupinvite':
+      case 'group_invite':   return Icons.group_add_rounded;
+      case 'payment':        return Icons.payments_rounded;
+      case 'poll':           return Icons.how_to_vote_rounded;
+      case 'birthday':       return Icons.cake_rounded;
+      case 'replay':         return Icons.videocam_rounded;
+      default:               return Icons.notifications_rounded;
+    }
+  }
+
+  Color _colorFor(String type) {
+    switch (type.toLowerCase()) {
+      case 'matchinvite':
+      case 'match_invite':  return const Color(0xFF3B82F6);
+      case 'groupinvite':
+      case 'group_invite':  return const Color(0xFF8B5CF6);
+      case 'payment':       return const Color(0xFF10B981);
+      case 'poll':          return const Color(0xFFF59E0B);
+      case 'birthday':      return const Color(0xFFEC4899);
+      case 'replay':        return const Color(0xFFEF4444);
+      default:              return const Color(0xFF64748B);
+    }
+  }
+
+  String _timeAgo(String iso) {
+    try {
+      final dt   = AppDateUtils.parseOrNow(iso);
+      final diff = DateTime.now().difference(dt);
+      if (diff.inMinutes < 1)  return 'Agora';
+      if (diff.inMinutes < 60) return '${diff.inMinutes}min atrás';
+      if (diff.inHours   < 24) return '${diff.inHours}h atrás';
+      if (diff.inDays    < 7)  return '${diff.inDays}d atrás';
+      return '${dt.day.toString().padLeft(2,'0')}/${dt.month.toString().padLeft(2,'0')}';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark  = Theme.of(context).brightness == Brightness.dark;
+    final bg      = isDark ? AppColors.slate900 : Colors.white;
+    final divCol  = isDark ? AppColors.slate800 : AppColors.slate100;
+
+    final notifsAsync = ref.watch(myNotificationsProvider);
+
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.85,
+      ),
+      decoration: BoxDecoration(
+        color:        bg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+
+          // ── Handle ────────────────────────────────────────────────
+          Container(
+            margin: const EdgeInsets.only(top: 12, bottom: 4),
+            width: 36, height: 4,
+            decoration: BoxDecoration(
+              color:        AppColors.slate400,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+
+          // ── Header ────────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 12, 8),
+            child: Row(
+              children: [
+                Text(
+                  'Notificações',
+                  style: TextStyle(
+                    fontSize:   16,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white : AppColors.slate900,
+                  ),
+                ),
+                const Spacer(),
+                notifsAsync.maybeWhen(
+                  data: (list) {
+                    final hasUnread = list.any(
+                      (n) => !(_readOverlay[n.id] ?? n.isRead),
+                    );
+                    if (!hasUnread) return const SizedBox.shrink();
+                    return TextButton(
+                      onPressed: () => _markAllRead(list),
+                      child: const Text(
+                        'Marcar tudo como lido',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    );
+                  },
+                  orElse: () => const SizedBox.shrink(),
+                ),
+              ],
+            ),
+          ),
+
+          Divider(height: 1, color: divCol),
+
+          // ── Body ──────────────────────────────────────────────────
+          Flexible(
+            child: notifsAsync.when(
+              loading: () => const Padding(
+                padding: EdgeInsets.all(40),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+              error: (_, __) => _EmptyNotifs(
+                isDark: isDark,
+                icon:   Icons.wifi_off_rounded,
+                label:  'Não foi possível carregar as notificações.',
+              ),
+              data: (notifs) {
+                if (notifs.isEmpty) {
+                  return _EmptyNotifs(
+                    isDark: isDark,
+                    icon:   Icons.notifications_off_outlined,
+                    label:  'Nenhuma notificação por enquanto.',
+                  );
+                }
+
+                return ListView.separated(
+                  shrinkWrap:   true,
+                  padding:      const EdgeInsets.only(bottom: 24),
+                  itemCount:    notifs.length,
+                  separatorBuilder: (_, __) => Divider(
+                    height: 1, indent: 72, color: divCol,
+                  ),
+                  itemBuilder: (ctx, i) {
+                    final n    = notifs[i];
+                    final read = _readOverlay[n.id] ?? n.isRead;
+                    final col  = _colorFor(n.type);
+
+                    return InkWell(
+                      onTap: () => _navigate(ctx, n),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+
+                            // Icon circle
+                            Container(
+                              width: 40, height: 40,
+                              margin: const EdgeInsets.only(right: 12),
+                              decoration: BoxDecoration(
+                                color:  col.withValues(alpha: .15),
+                                shape:  BoxShape.circle,
+                              ),
+                              child: Icon(_iconFor(n.type),
+                                  size: 18, color: col),
+                            ),
+
+                            // Text
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    n.title,
+                                    style: TextStyle(
+                                      fontSize:   13,
+                                      fontWeight: read
+                                          ? FontWeight.w400
+                                          : FontWeight.w700,
+                                      color: isDark
+                                          ? Colors.white
+                                          : AppColors.slate900,
+                                    ),
+                                  ),
+                                  if (n.body.isNotEmpty) ...[
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      n.body,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: isDark
+                                            ? AppColors.slate400
+                                            : AppColors.slate500,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                  if (n.createdAt.isNotEmpty) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _timeAgo(n.createdAt),
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: isDark
+                                            ? AppColors.slate500
+                                            : AppColors.slate400,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+
+                            // Unread dot
+                            if (!read)
+                              Container(
+                                margin: const EdgeInsets.only(top: 4, left: 8),
+                                width:  8, height: 8,
+                                decoration: const BoxDecoration(
+                                  color: Colors.red,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Empty state ───────────────────────────────────────────────────────────────
+
+class _EmptyNotifs extends StatelessWidget {
+  final bool     isDark;
+  final IconData icon;
+  final String   label;
+
+  const _EmptyNotifs({
+    required this.isDark,
+    required this.icon,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(40),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 40,
+              color: isDark ? AppColors.slate600 : AppColors.slate300),
+          const SizedBox(height: 12),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              color: isDark ? AppColors.slate500 : AppColors.slate400,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

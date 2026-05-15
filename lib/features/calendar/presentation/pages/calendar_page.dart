@@ -256,7 +256,7 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
               Icon(Icons.calendar_today_outlined, size: 44,
                   color: isDark ? AppColors.slate700 : AppColors.slate200),
               const SizedBox(height: 12),
-              Text('Selecione um grupo para ver o calendário.',
+              Text('Crie ou entre em um grupo',
                   style: TextStyle(color: isDark ? AppColors.slate500 : AppColors.slate400)),
             ],
           ),

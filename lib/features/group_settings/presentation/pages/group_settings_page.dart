@@ -174,7 +174,7 @@ class _GroupSettingsPageWrapperState extends ConsumerState<GroupSettingsPage> {
     final groupId      = account?.activeGroupId ?? activePlayer?.groupId;
 
     if (groupId == null || groupId.isEmpty) {
-      return const Scaffold(body: _NoGroupState());
+      return const Scaffold(body: _NoGroupState(message: 'Crie ou entre em um grupo'));
     }
 
     // Enquanto atualiza as roles, exibe loading para não bloquear admins
@@ -185,7 +185,7 @@ class _GroupSettingsPageWrapperState extends ConsumerState<GroupSettingsPage> {
 
     final isGroupAdm = account!.isAdmin || account.isGroupAdmin(groupId);
     if (!isGroupAdm) {
-      return const Scaffold(body: _NoGroupState());
+      return const Scaffold(body: _NoGroupState(message: 'Verifique suas permissões'));
     }
 
     final settingsAsync = ref.watch(groupSettingsProvider(groupId));
@@ -2354,20 +2354,21 @@ class _ConfirmRemoveDialogState extends State<_ConfirmRemoveDialog> {
 // ── Empty / Error states ──────────────────────────────────────────────────────
 
 class _NoGroupState extends StatelessWidget {
-  const _NoGroupState();
+  final String message;
+  const _NoGroupState({required this.message});
   @override
-  Widget build(BuildContext context) => const Center(
+  Widget build(BuildContext context) => Center(
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.settings_outlined, size: 52, color: AppColors.slate500),
-        SizedBox(height: 12),
-        Text('Sem acesso',
+        const Icon(Icons.settings_outlined, size: 52, color: AppColors.slate500),
+        const SizedBox(height: 12),
+        const Text('Sem acesso',
             style: TextStyle(color: AppColors.slate400, fontSize: 16)),
-        SizedBox(height: 4),
-        Text('Selecione um grupo ou verifique suas permissões.',
+        const SizedBox(height: 4),
+        Text(message,
             textAlign: TextAlign.center,
-            style:     TextStyle(color: AppColors.slate500, fontSize: 13)),
+            style:     const TextStyle(color: AppColors.slate500, fontSize: 13)),
       ],
     ),
   );

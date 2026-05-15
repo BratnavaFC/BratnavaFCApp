@@ -683,7 +683,7 @@ class _NoGroupState extends StatelessWidget {
       children: [
         Icon(Icons.cake_outlined, size: 48, color: AppColors.slate500),
         SizedBox(height: 12),
-        Text('Selecione um grupo para ver os aniversários.',
+        Text('Crie ou entre em um grupo',
             textAlign: TextAlign.center,
             style: TextStyle(color: AppColors.slate400, fontSize: 13)),
       ],

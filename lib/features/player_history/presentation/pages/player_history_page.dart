@@ -997,7 +997,7 @@ class _NoGroupState extends StatelessWidget {
         Icon(Icons.history_rounded, size: 48, color: AppColors.slate500),
         SizedBox(height: 12),
         Text(
-          'Selecione um grupo para ver o histórico.',
+          'Crie ou entre em um grupo',
           textAlign: TextAlign.center,
           style: TextStyle(
               color: AppColors.slate400, fontSize: 13),

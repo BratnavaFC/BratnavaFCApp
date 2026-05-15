@@ -689,7 +689,7 @@ class _NoGroup extends StatelessWidget {
       children: [
         Icon(Icons.how_to_vote_outlined, size: 40, color: isDark ? AppColors.slate700 : AppColors.slate200),
         const SizedBox(height: 12),
-        Text('Selecione um grupo no Dashboard.',
+        Text('Crie ou entre em um grupo',
           style: TextStyle(fontSize: 14, color: isDark ? AppColors.slate500 : AppColors.slate400)),
       ],
     ),

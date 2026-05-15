@@ -236,7 +236,7 @@ class _PaymentsPageState extends ConsumerState<PaymentsPage>
       return Scaffold(
         body: Center(
           child: Text(
-            'Selecione uma patota para ver os pagamentos.',
+            'Crie ou entre em um grupo',
             style: TextStyle(color: isDark ? AppColors.slate400 : AppColors.slate500),
           ),
         ),

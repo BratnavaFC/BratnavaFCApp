@@ -47,7 +47,7 @@ class _BetPageState extends ConsumerState<BetPage>
                   size: 44,
                   color: isDark ? AppColors.slate700 : AppColors.slate200),
               const SizedBox(height: 12),
-              Text('Selecione uma patota para ver as apostas.',
+              Text('Crie ou entre em um grupo',
                   style: TextStyle(
                       color: isDark ? AppColors.slate500 : AppColors.slate400)),
             ],

@@ -77,7 +77,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         ? activePlayer.playerName
         : groupId.isNotEmpty
             ? 'Selecione um jogador'
-            : 'Selecione um grupo';
+            : 'Crie ou entre em um grupo';
 
     return Scaffold(
       body: RefreshIndicator(
@@ -156,7 +156,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       BuildContext context, bool isDark, String groupId) {
     if (groupId.isEmpty) {
       return _CenteredMsg(
-          msg: 'Selecione uma patota para ver sua situação financeira.',
+          msg: 'Crie ou entre em um grupo',
           isDark: isDark);
     }
     final summaryAsync = ref.watch(myPaymentSummaryProvider(groupId));
@@ -248,7 +248,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       BuildContext context, bool isDark, String groupId, AsyncValue? async) {
     if (groupId.isEmpty) {
       return _CenteredMsg(
-          msg: 'Selecione uma patota para ver a partida atual.', isDark: isDark);
+          msg: 'Crie ou entre em um grupo', isDark: isDark);
     }
     if (async == null) return const SizedBox.shrink();
 

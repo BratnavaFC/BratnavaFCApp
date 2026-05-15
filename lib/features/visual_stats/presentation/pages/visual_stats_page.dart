@@ -1589,7 +1589,7 @@ class _NoGroupState extends StatelessWidget {
     child: Column(mainAxisSize: MainAxisSize.min, children: [
       Icon(Icons.bar_chart_rounded, size: 48, color: AppColors.slate500),
       SizedBox(height: 12),
-      Text('Selecione um grupo para ver as estatísticas.',
+      Text('Crie ou entre em um grupo',
           textAlign: TextAlign.center,
           style: TextStyle(color: AppColors.slate400, fontSize: 13)),
     ]),

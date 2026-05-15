@@ -293,7 +293,7 @@ class _ReplayVaultPageState extends ConsumerState<ReplayVaultPage>
                       : Colors.black26),
               const SizedBox(height: 12),
               const Text(
-                'Selecione um grupo para ver os replays.',
+                'Crie ou entre em um grupo',
                 style: TextStyle(color: Colors.grey),
               ),
             ],

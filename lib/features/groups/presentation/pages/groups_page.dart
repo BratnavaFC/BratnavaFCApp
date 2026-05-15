@@ -192,6 +192,9 @@ class _GroupsPageState extends ConsumerState<GroupsPage> {
   // playerId → pending counts (only populated for financeiros)
   Map<String, _PaymentBadge> _paymentMap = {};
 
+  // grupos onde o usuário é admin mas ainda não tem jogador (ex: recém-criado)
+  List<Map<String, String>> _adminOnlyGroups = [];
+
   Dio get _dio => ref.read(_dioProv);
 
   static dynamic _unwrap(dynamic data) {
@@ -209,6 +212,11 @@ class _GroupsPageState extends ConsumerState<GroupsPage> {
           'groupId': p.groupId,
           'groupName': p.groupName,
         });
+      }
+    }
+    for (final g in _adminOnlyGroups) {
+      if (seen.add(g['groupId']!)) {
+        result.add(g);
       }
     }
     return result;
@@ -334,6 +342,7 @@ class _GroupsPageState extends ConsumerState<GroupsPage> {
   void initState() {
     super.initState();
     _loadMine().then((_) {
+      _loadAdminGroups();
       if (_myGroups.length == 1) {
         _openGroup(_myGroups.first['groupId']!);
       }
@@ -355,6 +364,28 @@ class _GroupsPageState extends ConsumerState<GroupsPage> {
     } finally {
       if (mounted) setState(() => _mineLoading = false);
     }
+  }
+
+  Future<void> _loadAdminGroups() async {
+    final account = ref.read(accountStoreProvider).activeAccount;
+    if (account == null) return;
+    try {
+      final res = await _dio.get(ApiConstants.groupsByAdmin(account.userId));
+      final raw = _unwrap(res.data);
+      final playerGroupIds = _myPlayers.map((p) => p.groupId).toSet();
+      if (mounted) {
+        setState(() {
+          _adminOnlyGroups = (raw as List? ?? [])
+              .map((e) => e as Map<String, dynamic>)
+              .where((g) => !playerGroupIds.contains(g['id'] as String? ?? ''))
+              .map((g) => {
+                    'groupId': g['id'] as String? ?? '',
+                    'groupName': g['name'] as String? ?? '',
+                  })
+              .toList();
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _openGroup(String groupId) async {
@@ -407,6 +438,30 @@ class _GroupsPageState extends ConsumerState<GroupsPage> {
       await _loadMine();
       _reloadGroup();
     } catch (_) {}
+  }
+
+  void _showCreateGroup() {
+    final account = ref.read(accountStoreProvider).activeAccount;
+    if (account == null) return;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _CreateGroupSheet(
+        onSubmit: (name) async {
+          await _dio.post(ApiConstants.groups, data: {
+            'name': name,
+            'userAdminIds': [account.userId],
+            'scheduleMatchDate': null,
+            'createdByUserId': account.userId,
+          });
+
+          await _loadMine();
+          await _loadAdminGroups();
+          ref.read(authNotifierProvider.notifier).refreshRoles();
+        },
+      ),
+    );
   }
 
   void _showAddGuest(String groupId) {
@@ -494,12 +549,52 @@ class _GroupsPageState extends ConsumerState<GroupsPage> {
           if (_mineLoading)
             _buildLoadingHeader()
           else if (_myGroups.isEmpty)
-            _buildEmptyHeader()
+            _buildEmptyHeader(isDark)
           else if (_myGroups.length == 1)
             _buildSingleGroup(isDark)
           else
             _buildAccordion(isDark),
+          if (!_mineLoading && _myGroups.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _buildNewGroupFooter(isDark),
+          ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildNewGroupFooter(bool isDark) {
+    return GestureDetector(
+      onTap: _showCreateGroup,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.12)
+                : Colors.black.withValues(alpha: 0.1),
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.add,
+              size: 18,
+              color: isDark ? Colors.white54 : const Color(0xFF64748B),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Criar nova patota',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: isDark ? Colors.white54 : const Color(0xFF64748B),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -523,16 +618,23 @@ class _GroupsPageState extends ConsumerState<GroupsPage> {
     );
   }
 
-  Widget _buildEmptyHeader() {
-    return const _GradientCard(
+  Widget _buildEmptyHeader(bool isDark) {
+    return _GradientCard(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.group_outlined, size: 36, color: Colors.white38),
-          SizedBox(height: 12),
-          Text(
+          const Icon(Icons.group_outlined, size: 36, color: Colors.white38),
+          const SizedBox(height: 12),
+          const Text(
             'Você não faz parte de nenhuma patota.',
             style: TextStyle(fontSize: 14, color: Colors.white60),
+          ),
+          const SizedBox(height: 16),
+          _DarkBtn(
+            label: 'Criar patota',
+            icon: Icons.add,
+            style: _DarkBtnStyle.solid,
+            onTap: _showCreateGroup,
           ),
         ],
       ),
@@ -4019,6 +4121,105 @@ class _LeaveConfirmDialogState extends State<_LeaveConfirmDialog> {
               : const Text('Sair'),
         ),
       ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Create Group Sheet
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _CreateGroupSheet extends StatefulWidget {
+  final Future<void> Function(String name) onSubmit;
+  const _CreateGroupSheet({required this.onSubmit});
+
+  @override
+  State<_CreateGroupSheet> createState() => _CreateGroupSheetState();
+}
+
+class _CreateGroupSheetState extends State<_CreateGroupSheet> {
+  final _nameCtrl = TextEditingController();
+  bool _loading = false;
+  String? _err;
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final name = _nameCtrl.text.trim();
+    if (name.isEmpty) {
+      setState(() => _err = 'Nome é obrigatório.');
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _err = null;
+    });
+    try {
+      await widget.onSubmit(name);
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      setState(() => _err = _extractError(e));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return _ModalSheet(
+      isDark: isDark,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _SheetHeader(
+              icon: Icons.group_add_outlined,
+              iconBg: const Color(0xFF6366F1),
+              title: 'Criar patota',
+              subtitle: 'Você será o administrador',
+              isDark: isDark,
+            ),
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _FieldLabel('Nome da patota', isDark: isDark),
+                  const SizedBox(height: 6),
+                  _AppInput(
+                    controller: _nameCtrl,
+                    hint: 'Ex: Patota dos Brabos',
+                    enabled: !_loading,
+                    isDark: isDark,
+                    onSubmitted: (_) => _submit(),
+                  ),
+                  if (_err != null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      _err!,
+                      style: const TextStyle(
+                        color: Color(0xFFF87171),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 20),
+                  _PrimaryBtn(
+                    label: 'Criar patota',
+                    loading: _loading,
+                    onTap: _submit,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

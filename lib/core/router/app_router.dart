@@ -121,7 +121,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path:    '/register',
-        builder: (_, __) => const RegisterPage(),
+        builder: (_, state) => RegisterPage(
+          addMode: state.uri.queryParameters['add'] == '1',
+        ),
       ),
 
       // ── App shell ─────────────────────────────────────────────────

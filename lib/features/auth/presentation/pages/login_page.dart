@@ -211,35 +211,36 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   const SizedBox(height: 16),
 
                   // ── Link para cadastro ─────────────────────────────────
-                  if (!widget.addMode)
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'Não tem conta? ',
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Não tem conta? ',
+                        style: TextStyle(
+                          color:    isDark
+                              ? AppColors.slate400
+                              : AppColors.slate500,
+                          fontSize: 13,
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => context.push(
+                          widget.addMode ? '/register?add=1' : '/register',
+                        ),
+                        child: Text(
+                          'Criar conta',
                           style: TextStyle(
-                            color:    isDark
-                                ? AppColors.slate400
-                                : AppColors.slate500,
-                            fontSize: 13,
+                            color:      isDark
+                                ? Colors.white
+                                : AppColors.slate900,
+                            fontSize:   13,
+                            fontWeight: FontWeight.w600,
+                            decoration: TextDecoration.underline,
                           ),
                         ),
-                        GestureDetector(
-                          onTap: () => context.push('/register'),
-                          child: Text(
-                            'Criar conta',
-                            style: TextStyle(
-                              color:      isDark
-                                  ? Colors.white
-                                  : AppColors.slate900,
-                              fontSize:   13,
-                              fontWeight: FontWeight.w600,
-                              decoration: TextDecoration.underline,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),

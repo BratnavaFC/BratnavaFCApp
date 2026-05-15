@@ -7,7 +7,9 @@ import '../../../../shared/presentation/widgets/app_text_field.dart';
 import '../providers/auth_provider.dart';
 
 class RegisterPage extends ConsumerStatefulWidget {
-  const RegisterPage({super.key});
+  final bool addMode;
+
+  const RegisterPage({super.key, this.addMode = false});
 
   @override
   ConsumerState<RegisterPage> createState() => _RegisterPageState();
@@ -52,7 +54,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
       data: (_) async {
         setState(() => _success = true);
         await Future.delayed(const Duration(milliseconds: 600));
-        if (mounted) context.go('/login');
+        if (mounted) context.go(widget.addMode ? '/login?add=1' : '/login');
       },
     );
   }
@@ -107,7 +109,9 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                         ),
                       ),
                       GestureDetector(
-                        onTap: () => context.go('/login'),
+                        onTap: () => context.go(
+                          widget.addMode ? '/login?add=1' : '/login',
+                        ),
                         child: Text(
                           'Entrar',
                           style: TextStyle(

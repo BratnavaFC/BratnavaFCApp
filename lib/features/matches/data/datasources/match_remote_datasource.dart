@@ -90,11 +90,17 @@ class MatchRemoteDataSource {
   // ── Aceitação ─────────────────────────────────────────────────────────────
 
   Future<void> acceptInvite(String groupId, String matchId, String playerId) async {
-    await _dio.patch(ApiConstants.matchAccept(groupId, matchId));
+    await _dio.patch(
+      ApiConstants.matchInviteAccept(groupId, matchId),
+      data: {'playerId': playerId},
+    );
   }
 
   Future<void> rejectInvite(String groupId, String matchId, String playerId) async {
-    await _dio.patch(ApiConstants.matchReject(groupId, matchId));
+    await _dio.patch(
+      ApiConstants.matchInviteReject(groupId, matchId),
+      data: {'playerId': playerId},
+    );
   }
 
   Future<void> goToMatchmaking(String groupId, String matchId) async {
@@ -119,9 +125,18 @@ class MatchRemoteDataSource {
     required int playersPerTeam,
     required bool includeGoalkeepers,
   }) async {
+    final eligible = players
+        .where((p) => p.playerId.isNotEmpty && p.inviteResponse == InviteResponse.accepted)
+        .toList();
+
+    // Mapa id → info para enriquecer a resposta (backend não devolve nomes)
+    final nameMap = {
+      for (final p in eligible)
+        p.playerId: (name: p.playerName, isGoalkeeper: p.isGoalkeeper),
+    };
+
     final dto = {
-      'players': players
-          .where((p) => p.playerId.isNotEmpty && p.inviteResponse == InviteResponse.accepted)
+      'players': eligible
           .map((p) => {'id': p.playerId, 'name': p.playerName, 'isGoalkeeper': p.isGoalkeeper})
           .toList(),
       'strategyType':       strategyType,
@@ -129,11 +144,35 @@ class MatchRemoteDataSource {
       'includeGoalkeepers': includeGoalkeepers,
       'optionsCount':       3,
     };
+
     final res = await _dio.post(ApiConstants.teamGenGenerate, data: dto);
     final raw = _unwrap(res.data);
     final list = raw is List ? raw : (raw as Map?)?['options'] ?? [];
+
+    // Enriquece cada jogador retornado com o nome do mapa local
+    Map<String, dynamic> enrichPlayer(Map<String, dynamic> j) {
+      final id   = (j['playerId'] ?? j['id'] ?? '').toString();
+      final info = nameMap[id];
+      return {
+        ...j,
+        if (info != null) 'name':         info.name,
+        if (info != null) 'isGoalkeeper':  info.isGoalkeeper,
+      };
+    }
+
+    Map<String, dynamic> enrichOption(Map<String, dynamic> opt) {
+      List enrichList(dynamic v) =>
+          (v as List? ?? []).map((e) => enrichPlayer(e as Map<String, dynamic>)).toList();
+      return {
+        ...opt,
+        'teamA':      enrichList(opt['teamA']      ?? opt['TeamA']),
+        'teamB':      enrichList(opt['teamB']      ?? opt['TeamB']),
+        'unassigned': enrichList(opt['unassigned'] ?? opt['Unassigned']),
+      };
+    }
+
     return (list as List)
-        .map((e) => TeamGenOption.fromJson(e as Map<String, dynamic>))
+        .map((e) => TeamGenOption.fromJson(enrichOption(e as Map<String, dynamic>)))
         .toList();
   }
 

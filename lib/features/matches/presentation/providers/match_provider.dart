@@ -314,10 +314,16 @@ class MatchNotifier extends StateNotifier<MatchState> {
     required int playersPerTeam,
     required bool includeGoalkeepers,
   }) async {
+    // União de todas as fontes de jogadores aceitos, deduplicada por matchPlayerId.
+    // participants = todos os aceitos; unassigned/teamA/teamB cobrem cenários
+    // onde participants está vazio ou incompleto.
+    final seen = <String>{};
     final allPlayers = [
-      ...state.acceptedPlayers,
       ...state.participants,
-    ];
+      ...state.unassignedPlayers,
+      ...state.teamAPlayers,
+      ...state.teamBPlayers,
+    ].where((p) => seen.add(p.matchPlayerId)).toList();
     state = state.copyWith(mutating: true, teamGenOptions: [], selectedTeamGenIdx: 0);
     try {
       final options = await _ds.generateTeams(

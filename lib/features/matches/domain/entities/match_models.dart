@@ -205,19 +205,51 @@ class TeamGenPlayer {
   final String name;
   final bool isGoalkeeper;
   final double weight;
+  final double? attackRatingNorm;
+  final double? defenseRatingNorm;
+  final double? physicalRatingNorm;
 
   const TeamGenPlayer({
     required this.playerId,
     required this.name,
     required this.isGoalkeeper,
     required this.weight,
+    this.attackRatingNorm,
+    this.defenseRatingNorm,
+    this.physicalRatingNorm,
   });
 
   factory TeamGenPlayer.fromJson(Map<String, dynamic> j) => TeamGenPlayer(
-    playerId:     (j['playerId'] ?? j['id'] ?? '').toString(),
-    name:         j['name']         as String? ?? j['playerName'] as String? ?? '',
-    isGoalkeeper: j['isGoalkeeper'] as bool?   ?? false,
-    weight:       (j['weight']      as num?    ?? 0).toDouble(),
+    playerId:            (j['playerId'] ?? j['id'] ?? '').toString(),
+    name:                j['name']         as String? ?? j['playerName'] as String? ?? '',
+    isGoalkeeper:        j['isGoalkeeper'] as bool?   ?? false,
+    weight:              (j['weight']      as num?    ?? 0).toDouble(),
+    attackRatingNorm:    (j['attackRatingNorm']   as num?)?.toDouble(),
+    defenseRatingNorm:   (j['defenseRatingNorm']  as num?)?.toDouble(),
+    physicalRatingNorm:  (j['physicalRatingNorm'] as num?)?.toDouble(),
+  );
+}
+
+// ── Explicação estruturada de uma opção ──────────────────────────────────────
+
+class TeamGenExplanation {
+  final String resumo;
+  final String analiseTimeA;
+  final String analiseTimeB;
+  final String conclusao;
+
+  const TeamGenExplanation({
+    required this.resumo,
+    required this.analiseTimeA,
+    required this.analiseTimeB,
+    required this.conclusao,
+  });
+
+  factory TeamGenExplanation.fromJson(Map<String, dynamic> j) => TeamGenExplanation(
+    resumo:      j['resumo']       as String? ?? j['Resumo']       as String? ?? '',
+    analiseTimeA: j['analiseTimeA'] as String? ?? j['AnaliseTimeA'] as String? ?? '',
+    analiseTimeB: j['analiseTimeB'] as String? ?? j['AnaliseTimeB'] as String? ?? '',
+    conclusao:   j['conclusao']    as String? ?? j['Conclusao']    as String? ?? '',
   );
 }
 
@@ -230,7 +262,10 @@ class TeamGenOption {
   final double teamAWeight;
   final double teamBWeight;
   final double balanceDiff;
-  final String? explanation;
+  final double? attackDiff;
+  final double? defenseDiff;
+  final double? physicalDiff;
+  final TeamGenExplanation? explanation;
 
   const TeamGenOption({
     required this.teamA,
@@ -239,20 +274,33 @@ class TeamGenOption {
     required this.teamAWeight,
     required this.teamBWeight,
     required this.balanceDiff,
+    this.attackDiff,
+    this.defenseDiff,
+    this.physicalDiff,
     this.explanation,
   });
 
   factory TeamGenOption.fromJson(Map<String, dynamic> j) {
     List<TeamGenPlayer> parseList(dynamic v) =>
         (v as List? ?? []).map((e) => TeamGenPlayer.fromJson(e as Map<String, dynamic>)).toList();
+
+    final rawExp = j['explanation'] ?? j['Explanation'];
+    TeamGenExplanation? explanation;
+    if (rawExp is Map<String, dynamic>) {
+      explanation = TeamGenExplanation.fromJson(rawExp);
+    }
+
     return TeamGenOption(
-      teamA:       parseList(j['teamA']      ?? j['TeamA']),
-      teamB:       parseList(j['teamB']      ?? j['TeamB']),
-      unassigned:  parseList(j['unassigned'] ?? j['Unassigned']),
-      teamAWeight: (j['teamAWeight'] as num? ?? 0).toDouble(),
-      teamBWeight: (j['teamBWeight'] as num? ?? 0).toDouble(),
-      balanceDiff: (j['balanceDiff'] as num? ?? 0).toDouble(),
-      explanation: j['explanation'] as String? ?? j['Explanation'] as String?,
+      teamA:        parseList(j['teamA']      ?? j['TeamA']),
+      teamB:        parseList(j['teamB']      ?? j['TeamB']),
+      unassigned:   parseList(j['unassigned'] ?? j['Unassigned']),
+      teamAWeight:  (j['teamAWeight']  as num? ?? 0).toDouble(),
+      teamBWeight:  (j['teamBWeight']  as num? ?? 0).toDouble(),
+      balanceDiff:  (j['balanceDiff']  as num? ?? 0).toDouble(),
+      attackDiff:   (j['attackDiff']   as num?)?.toDouble(),
+      defenseDiff:  (j['defenseDiff']  as num?)?.toDouble(),
+      physicalDiff: (j['physicalDiff'] as num?)?.toDouble(),
+      explanation:  explanation,
     );
   }
 
@@ -265,13 +313,16 @@ class TeamGenOption {
     double? balanceDiff,
   }) =>
       TeamGenOption(
-        teamA:       teamA       ?? this.teamA,
-        teamB:       teamB       ?? this.teamB,
-        unassigned:  unassigned  ?? this.unassigned,
-        teamAWeight: teamAWeight ?? this.teamAWeight,
-        teamBWeight: teamBWeight ?? this.teamBWeight,
-        balanceDiff: balanceDiff ?? this.balanceDiff,
-        explanation: explanation,
+        teamA:        teamA       ?? this.teamA,
+        teamB:        teamB       ?? this.teamB,
+        unassigned:   unassigned  ?? this.unassigned,
+        teamAWeight:  teamAWeight ?? this.teamAWeight,
+        teamBWeight:  teamBWeight ?? this.teamBWeight,
+        balanceDiff:  balanceDiff ?? this.balanceDiff,
+        attackDiff:   attackDiff,
+        defenseDiff:  defenseDiff,
+        physicalDiff: physicalDiff,
+        explanation:  explanation,
       );
 }
 

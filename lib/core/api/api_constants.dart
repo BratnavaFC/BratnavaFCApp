@@ -183,6 +183,12 @@ class ApiConstants {
   static String matchMyInviteReject(String groupId, String matchId) =>
       '/api/matches/group/$groupId/$matchId/my-invite/reject';
 
+  // Match invite — aceitar/rejeitar com playerId explícito (admin agindo por outro jogador)
+  static String matchInviteAccept(String groupId, String matchId) =>
+      '/api/Matches/group/$groupId/$matchId/invite/accept';
+  static String matchInviteReject(String groupId, String matchId) =>
+      '/api/Matches/group/$groupId/$matchId/invite/reject';
+
   // TeamGeneration
   static const String teamGenGenerate = '/api/TeamGeneration/generate';
   static String teamGenSpotlight(String groupId) =>

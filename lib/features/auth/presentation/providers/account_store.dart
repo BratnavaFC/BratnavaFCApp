@@ -110,6 +110,34 @@ class AccountStore extends StateNotifier<AccountState> {
     await _persist();
   }
 
+  /// Troca para outra conta limpando activeGroupId/activePlayerId dela.
+  /// Evita que dados contaminados de trocas anteriores apareçam no novo ativo.
+  Future<void> switchTo(String userId) async {
+    final idx = state.accounts.indexWhere((a) => a.userId == userId);
+    if (idx < 0) {
+      state = state.copyWith(activeAccountId: userId);
+      await _persist();
+      return;
+    }
+    final a = state.accounts[idx];
+    final list = List<Account>.from(state.accounts);
+    list[idx] = Account(
+      userId:            a.userId,
+      name:              a.name,
+      email:             a.email,
+      roles:             a.roles,
+      accessToken:       a.accessToken,
+      refreshToken:      a.refreshToken,
+      activeGroupId:     null,
+      activePlayerId:    null,
+      groupAdminIds:     const [],
+      groupFinanceiroIds: const [],
+      keepLoggedIn:      a.keepLoggedIn,
+    );
+    state = AccountState(accounts: list, activeAccountId: userId);
+    await _persist();
+  }
+
   /// Atualiza tokens do active account após um refresh.
   Future<void> updateTokens(String accessToken, String refreshToken) async {
     final active = state.activeAccount;

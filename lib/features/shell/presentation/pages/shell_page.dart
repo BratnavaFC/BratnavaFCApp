@@ -78,10 +78,18 @@ class _ShellPageState extends ConsumerState<ShellPage>
     ref.watch(tokenRefreshServiceProvider);
 
     final selected = _selectedIndex(context);
+    // Key forces full widget subtree recreation on account switch, clearing
+    // any widget-local state (timers, refresh flags) from the previous account.
+    final accountKey = ref.watch(
+      accountStoreProvider.select((s) => s.activeAccountId),
+    );
 
     return Scaffold(
       appBar: const AppTopBar(),
-      body: widget.child,
+      body: KeyedSubtree(
+        key: ValueKey(accountKey),
+        child: widget.child,
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: selected,
         onDestinationSelected: (i) {

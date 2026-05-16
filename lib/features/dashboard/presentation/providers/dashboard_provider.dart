@@ -50,22 +50,24 @@ final activePlayerIdProvider = StateProvider<String?>((ref) => null);
 /// Jogador ativo resolvido (usa o activePlayerId do account store ou
 /// o primeiro da lista). Não autoDispose pelo mesmo motivo acima.
 final activePlayerProvider = Provider<MyPlayer?>((ref) {
-  final players       = ref.watch(myPlayersProvider).valueOrNull ?? [];
+  final playersAsync  = ref.watch(myPlayersProvider);
   final accountActive = ref.watch(accountStoreProvider).activeAccount;
   final manualId      = ref.watch(activePlayerIdProvider);
 
-  final targetId = manualId ??
-      accountActive?.activePlayerId ??
-      (players.isNotEmpty ? players.first.playerId : null);
+  // Enquanto re-fetch está em andamento (troca de conta), valueOrNull ainda
+  // contém os jogadores da conta anterior. Retorna null para não exibir dados
+  // do grupo errado no topo e no dashboard durante a transição.
+  if (playersAsync.isLoading) return null;
 
-  if (targetId == null || players.isEmpty) return null;
+  final players = playersAsync.valueOrNull ?? [];
+  if (players.isEmpty) return null;
 
-  try {
-    return players.firstWhere(
-      (p) => p.playerId == targetId,
-      orElse: () => players.first,
-    );
-  } catch (_) {
-    return null;
+  final explicitId = manualId ?? accountActive?.activePlayerId;
+  if (explicitId != null) {
+    final matches = players.where((p) => p.playerId == explicitId);
+    return matches.isEmpty ? null : matches.first;
   }
+
+  // Sem ID explícito salvo: usa o primeiro jogador disponível.
+  return players.first;
 });

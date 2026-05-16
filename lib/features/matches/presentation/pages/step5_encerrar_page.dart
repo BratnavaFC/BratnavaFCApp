@@ -106,7 +106,7 @@ class Step5EncerrarPage extends ConsumerWidget {
                     icon: s.mutating
                         ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                         : const Icon(Icons.arrow_forward),
-                    label: const Text('Pós-jogo →'),
+                    label: const Text('Pós-jogo'),
                   ),
                 ),
               ),

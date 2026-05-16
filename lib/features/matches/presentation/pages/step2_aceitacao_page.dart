@@ -15,34 +15,23 @@ class Step2AceitacaoPage extends ConsumerStatefulWidget {
 
 class _Step2State extends ConsumerState<Step2AceitacaoPage> {
 
-  bool get _isAdmin {
-    final acc    = ref.read(accountStoreProvider).activeAccount;
-    final player = ref.read(activePlayerProvider);
-    final gid    = acc?.activeGroupId ?? player?.groupId ?? '';
-    return (acc?.isAdmin ?? false) || (gid.isNotEmpty && (acc?.isGroupAdmin(gid) ?? false));
-  }
-
-  String get _myPlayerId {
-    final acc    = ref.read(accountStoreProvider).activeAccount;
-    final player = ref.read(activePlayerProvider);
-    return acc?.activePlayerId ?? player?.playerId ?? '';
-  }
-
   Future<void> _goNext() async {
-    if (!_isAdmin) return;
     await ref.read(matchNotifierProvider.notifier).goToMatchmaking();
-    // Navigation driven by state update in parent MatchesPage
   }
 
   @override
   Widget build(BuildContext context) {
-    final s        = ref.watch(matchNotifierProvider);
-    final accepted = s.acceptedPlayers;
-    final rejected = s.rejectedPlayers;
-    final pending  = s.pendingPlayers;
-    final myId     = _myPlayerId;
-    final isAdmin  = _isAdmin;
-    final pct      = s.maxPlayers > 0 ? accepted.length / s.maxPlayers : 0.0;
+    final s           = ref.watch(matchNotifierProvider);
+    final account     = ref.watch(accountStoreProvider).activeAccount;
+    final activePlayer = ref.watch(activePlayerProvider);
+    final accepted    = s.acceptedPlayers;
+    final rejected    = s.rejectedPlayers;
+    final pending     = s.pendingPlayers;
+    final myId        = account?.activePlayerId ?? activePlayer?.playerId ?? '';
+    final gid         = account?.activeGroupId ?? activePlayer?.groupId ?? '';
+    final isGroupAdmin = gid.isNotEmpty && (account?.isGroupAdmin(gid) ?? false);
+    final isAdmin     = (account?.isAdmin ?? false) || isGroupAdmin;
+    final pct         = s.maxPlayers > 0 ? accepted.length / s.maxPlayers : 0.0;
 
     return Column(
         children: [
@@ -126,8 +115,8 @@ class _Step2State extends ConsumerState<Step2AceitacaoPage> {
             ),
           ),
 
-          // ── Botão Ir para MatchMaking (admin) ────────────────────────────
-          if (isAdmin)
+          // ── Botão Ir para MatchMaking (admin do grupo) ───────────────────
+          if (isGroupAdmin)
             SafeArea(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -211,6 +200,8 @@ extension _InviteVariantX on _InviteVariant {
     return this == _InviteVariant.pending || this == _InviteVariant.accepted;
   }
 }
+
+// ── Card de convite pessoal (para quem é admin e também jogador) ──────────────
 
 // ── Card de lista de convites ─────────────────────────────────────────────────
 

@@ -6,6 +6,7 @@ import '../../../auth/presentation/providers/account_store.dart';
 import '../../domain/entities/match_models.dart';
 import '../providers/match_provider.dart';
 import '../widgets/goal_entry_row.dart';
+import '../widgets/inline_goal_tracker.dart';
 
 class Step4JogoPage extends ConsumerStatefulWidget {
   const Step4JogoPage({super.key});
@@ -16,11 +17,19 @@ class Step4JogoPage extends ConsumerStatefulWidget {
 
 class _Step4State extends ConsumerState<Step4JogoPage> {
   // ── GoalTracker inline state ──────────────────────────────────────────────
-  bool    _showGoalForm = false;
-  int     _goalMinute   = 0;
+  // Minutos desde meia-noite; inicializado com hora atual.
+  late int _goalMinute;
   String? _scorerMpId;
   String? _assistMpId;
-  bool    _isOwnGoal    = false;
+  bool    _isOwnGoal  = false;
+  String? _editingGoalId;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _goalMinute = now.hour * 60 + now.minute;
+  }
 
   bool get _isAdmin {
     final acc = ref.read(accountStoreProvider).activeAccount;
@@ -29,26 +38,48 @@ class _Step4State extends ConsumerState<Step4JogoPage> {
   }
 
   void _resetGoalForm() {
+    final now = DateTime.now();
     setState(() {
-      _showGoalForm = false;
-      _goalMinute   = 0;
-      _scorerMpId   = null;
-      _assistMpId   = null;
-      _isOwnGoal    = false;
+      _editingGoalId = null;
+      _goalMinute    = now.hour * 60 + now.minute;
+      _scorerMpId    = null;
+      _assistMpId    = null;
+      _isOwnGoal     = false;
+    });
+  }
+
+  void _editGoal(MatchGoal goal, List<MatchPlayerInfo> allPlayers) {
+    int minutes = 0;
+    if (goal.time != null) {
+      final parts = goal.time!.split(':');
+      if (parts.length >= 2) {
+        minutes = (int.tryParse(parts[0]) ?? 0) * 60 + (int.tryParse(parts[1]) ?? 0);
+      }
+    }
+    final scorerMpId = goal.scorerMatchPlayerId ??
+        allPlayers.where((p) => p.playerId == goal.scorerPlayerId).firstOrNull?.matchPlayerId;
+    final assistMpId = goal.assistMatchPlayerId ??
+        allPlayers.where((p) => p.playerId == goal.assistPlayerId).firstOrNull?.matchPlayerId;
+    setState(() {
+      _editingGoalId = goal.goalId;
+      _goalMinute    = minutes;
+      _scorerMpId    = scorerMpId;
+      _assistMpId    = assistMpId;
+      _isOwnGoal     = goal.isOwnGoal;
     });
   }
 
   Future<void> _endMatch() async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('Encerrar partida?'),
         content: const Text('A partida será encerrada. Você poderá registrar o placar e MVP no pós-jogo.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: AppColors.rose500),
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Encerrar'),
           ),
         ],
@@ -58,14 +89,35 @@ class _Step4State extends ConsumerState<Step4JogoPage> {
     await ref.read(matchNotifierProvider.notifier).endMatch();
   }
 
+  void _triggerReplay(String eventType) {
+    ref.read(matchNotifierProvider.notifier).publishEvent(eventType);
+  }
+
   Future<void> _saveGoal(List<MatchPlayerInfo> players) async {
     if (_scorerMpId == null) return;
-    await ref.read(matchNotifierProvider.notifier).addGoal(
-      scorerPlayerId: _scorerMpId!,
-      assistPlayerId: _assistMpId,
-      time: '$_goalMinute',
-      isOwnGoal: _isOwnGoal,
-    );
+    final scorer = players.where((p) => p.matchPlayerId == _scorerMpId).firstOrNull;
+    if (scorer == null) return;
+    final assist = _assistMpId != null
+        ? players.where((p) => p.matchPlayerId == _assistMpId).firstOrNull
+        : null;
+    final timeStr = '${(_goalMinute ~/ 60).toString().padLeft(2, '0')}:${(_goalMinute % 60).toString().padLeft(2, '0')}';
+
+    if (_editingGoalId != null) {
+      await ref.read(matchNotifierProvider.notifier).updateGoal(
+        goalId:         _editingGoalId!,
+        scorerPlayerId: scorer.playerId,
+        assistPlayerId: assist?.playerId,
+        time:           timeStr,
+        isOwnGoal:      _isOwnGoal,
+      );
+    } else {
+      await ref.read(matchNotifierProvider.notifier).addGoal(
+        scorerPlayerId: scorer.playerId,
+        assistPlayerId: assist?.playerId,
+        time:           timeStr,
+        isOwnGoal:      _isOwnGoal,
+      );
+    }
     _resetGoalForm();
   }
 
@@ -130,12 +182,12 @@ class _Step4State extends ConsumerState<Step4JogoPage> {
                     const SizedBox(height: 16),
 
                     // ── GoalTracker inline ───────────────────────────────────
-                    _InlineGoalTracker(
-                      show:       _showGoalForm,
+                    InlineGoalTracker(
                       minute:     _goalMinute,
                       scorerMpId: _scorerMpId,
                       assistMpId: _assistMpId,
                       isOwnGoal:  _isOwnGoal,
+                      isEditing:  _editingGoalId != null,
                       teamAPlayers: s.teamAPlayers.isNotEmpty ? s.teamAPlayers : allPlayers,
                       teamBPlayers: s.teamBPlayers,
                       teamAName:  s.teamAColor?.name ?? 'Time A',
@@ -143,15 +195,6 @@ class _Step4State extends ConsumerState<Step4JogoPage> {
                       teamAColor: s.teamAColor?.color,
                       teamBColor: s.teamBColor?.color,
                       mutating:   s.mutating,
-                      onToggle: () => setState(() {
-                        _showGoalForm = !_showGoalForm;
-                        if (!_showGoalForm) {
-                          _scorerMpId = null;
-                          _assistMpId = null;
-                          _isOwnGoal  = false;
-                          _goalMinute = 0;
-                        }
-                      }),
                       onMinuteChanged: (v) => setState(() => _goalMinute = v),
                       onScorerChanged: (id) => setState(() {
                         _scorerMpId = id;
@@ -162,6 +205,14 @@ class _Step4State extends ConsumerState<Step4JogoPage> {
                       onSave: () => _saveGoal(allPlayers),
                       onCancel: _resetGoalForm,
                     ),
+                    const SizedBox(height: 8),
+
+                    // ── Replay ───────────────────────────────────────────────
+                    if (_isAdmin)
+                      _ReplaySection(
+                        onGol:    () => _triggerReplay('Gol'),
+                        onJogada: () => _triggerReplay('Jogada'),
+                      ),
                     const SizedBox(height: 8),
 
                     // ── Lista de gols ────────────────────────────────────────
@@ -188,6 +239,7 @@ class _Step4State extends ConsumerState<Step4JogoPage> {
                         teamAColor: s.teamAColor?.color,
                         teamBColor: s.teamBColor?.color,
                         isAdmin:   _isAdmin,
+                        onEdit:    _isAdmin ? () => _editGoal(g, allPlayers) : null,
                         onRemove:  _isAdmin
                             ? () => ref.read(matchNotifierProvider.notifier).removeGoal(g.goalId)
                             : null,
@@ -221,49 +273,15 @@ class _Step4State extends ConsumerState<Step4JogoPage> {
   }
 }
 
-// ── Inline GoalTracker ────────────────────────────────────────────────────────
+// ── Seção Replay ──────────────────────────────────────────────────────────────
 
-class _InlineGoalTracker extends StatelessWidget {
-  final bool    show;
-  final int     minute;
-  final String? scorerMpId;
-  final String? assistMpId;
-  final bool    isOwnGoal;
-  final List<MatchPlayerInfo> teamAPlayers;
-  final List<MatchPlayerInfo> teamBPlayers;
-  final String  teamAName;
-  final String  teamBName;
-  final Color?  teamAColor;
-  final Color?  teamBColor;
-  final bool    mutating;
-  final VoidCallback onToggle;
-  final ValueChanged<int>     onMinuteChanged;
-  final ValueChanged<String?> onScorerChanged;
-  final ValueChanged<String?> onAssistChanged;
-  final ValueChanged<bool>    onOwnGoalChanged;
-  final VoidCallback onSave;
-  final VoidCallback onCancel;
+class _ReplaySection extends StatelessWidget {
+  final VoidCallback onGol;
+  final VoidCallback onJogada;
 
-  const _InlineGoalTracker({
-    required this.show,
-    required this.minute,
-    required this.scorerMpId,
-    required this.assistMpId,
-    required this.isOwnGoal,
-    required this.teamAPlayers,
-    required this.teamBPlayers,
-    required this.teamAName,
-    required this.teamBName,
-    this.teamAColor,
-    this.teamBColor,
-    required this.mutating,
-    required this.onToggle,
-    required this.onMinuteChanged,
-    required this.onScorerChanged,
-    required this.onAssistChanged,
-    required this.onOwnGoalChanged,
-    required this.onSave,
-    required this.onCancel,
+  const _ReplaySection({
+    required this.onGol,
+    required this.onJogada,
   });
 
   @override
@@ -271,291 +289,53 @@ class _InlineGoalTracker extends StatelessWidget {
     return Card(
       elevation: 1,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // ── Header / toggle ────────────────────────────────────────────
-          InkWell(
-            onTap: onToggle,
-            borderRadius: show
-                ? const BorderRadius.vertical(top: Radius.circular(12))
-                : BorderRadius.circular(12),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                children: [
-                  const Icon(Icons.sports_soccer, size: 18, color: AppColors.slate500),
-                  const SizedBox(width: 8),
-                  const Text(
-                    'Registrar Gol',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-                  ),
-                  const Spacer(),
-                  Icon(
-                    show ? Icons.keyboard_arrow_up : Icons.add_circle_outline,
-                    color: show ? AppColors.slate400 : Theme.of(context).colorScheme.primary,
-                  ),
-                ],
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'REPLAY',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.2,
+                color: AppColors.slate400,
               ),
             ),
-          ),
-
-          if (show) ...[
-            const Divider(height: 1),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // ── Minuto ──────────────────────────────────────────────
-                  Row(
-                    children: [
-                      const Text('Minuto:', style: TextStyle(fontSize: 13, color: AppColors.slate600)),
-                      const SizedBox(width: 12),
-                      IconButton(
-                        icon: const Icon(Icons.remove_circle_outline, size: 20),
-                        onPressed: minute > 0 ? () => onMinuteChanged(minute - 1) : null,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                      ),
-                      SizedBox(
-                        width: 44,
-                        child: Text(
-                          '$minute\'',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.add_circle_outline, size: 20),
-                        onPressed: () => onMinuteChanged(minute + 1),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                      ),
-                    ],
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF1E8449),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    onPressed: onGol,
+                    icon: const Icon(Icons.emoji_events_outlined, size: 18),
+                    label: const Text('GOL',
+                        style: TextStyle(fontWeight: FontWeight.w700, letterSpacing: 0.8)),
                   ),
-                  const SizedBox(height: 12),
-
-                  // ── Seleção de goleador (2 colunas) ─────────────────────
-                  const Text(
-                    'GOLEADOR',
-                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700,
-                        letterSpacing: 0.8, color: AppColors.slate400),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF2E5FD9),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    onPressed: onJogada,
+                    icon: const Icon(Icons.bolt_rounded, size: 18),
+                    label: const Text('JOGADA',
+                        style: TextStyle(fontWeight: FontWeight.w700, letterSpacing: 0.8)),
                   ),
-                  const SizedBox(height: 8),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: _PlayerColumn(
-                        label:     teamAName,
-                        color:     teamAColor,
-                        players:   teamAPlayers,
-                        selectedId: scorerMpId,
-                        onTap:     onScorerChanged,
-                      )),
-                      const SizedBox(width: 8),
-                      if (teamBPlayers.isNotEmpty)
-                        Expanded(child: _PlayerColumn(
-                          label:     teamBName,
-                          color:     teamBColor,
-                          players:   teamBPlayers,
-                          selectedId: scorerMpId,
-                          onTap:     onScorerChanged,
-                        )),
-                    ],
-                  ),
-
-                  if (scorerMpId != null) ...[
-                    const SizedBox(height: 12),
-                    const Divider(),
-                    const SizedBox(height: 8),
-
-                    // ── Gol contra ──────────────────────────────────────
-                    Row(
-                      children: [
-                        Checkbox(
-                          value: isOwnGoal,
-                          onChanged: (v) => onOwnGoalChanged(v ?? false),
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        const Text('Gol contra', style: TextStyle(fontSize: 13)),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-
-                    // ── Assistência ─────────────────────────────────────
-                    const Text(
-                      'ASSISTÊNCIA (opcional)',
-                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700,
-                          letterSpacing: 0.8, color: AppColors.slate400),
-                    ),
-                    const SizedBox(height: 8),
-                    _AssistGrid(
-                      allPlayers: [...teamAPlayers, ...teamBPlayers],
-                      scorerMpId: scorerMpId!,
-                      assistMpId: assistMpId,
-                      onTap:     onAssistChanged,
-                    ),
-                    const SizedBox(height: 12),
-
-                    // ── Botões ──────────────────────────────────────────
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: onCancel,
-                            child: const Text('Cancelar'),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: FilledButton(
-                            onPressed: mutating ? null : onSave,
-                            child: mutating
-                                ? const SizedBox(width: 16, height: 16,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                : const Text('Salvar Gol'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ],
-              ),
+                ),
+              ],
             ),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-// ── Coluna de jogadores (seleção goleador) ────────────────────────────────────
-
-class _PlayerColumn extends StatelessWidget {
-  final String  label;
-  final Color?  color;
-  final List<MatchPlayerInfo> players;
-  final String? selectedId;
-  final ValueChanged<String?> onTap;
-
-  const _PlayerColumn({
-    required this.label,
-    this.color,
-    required this.players,
-    required this.selectedId,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final teamColor = color ?? AppColors.slate400;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(children: [
-          Container(width: 8, height: 8,
-              decoration: BoxDecoration(shape: BoxShape.circle, color: teamColor)),
-          const SizedBox(width: 4),
-          Text(label,
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: teamColor)),
-        ]),
-        const SizedBox(height: 4),
-        ...players.map((p) {
-          final isSel = p.matchPlayerId == selectedId;
-          return GestureDetector(
-            onTap: () => onTap(isSel ? null : p.matchPlayerId),
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 4),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: isSel ? teamColor : AppColors.slate200),
-                color: isSel ? teamColor.withValues(alpha: 0.1) : AppColors.slate50,
-              ),
-              child: Row(children: [
-                if (p.isGoalkeeper)
-                  const Icon(Icons.sports_handball, size: 12, color: AppColors.slate400),
-                if (p.isGoalkeeper) const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    p.playerName,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: isSel ? FontWeight.w700 : FontWeight.w400,
-                      color: isSel ? teamColor : AppColors.slate800,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                if (isSel) Icon(Icons.check_circle, size: 14, color: teamColor),
-              ]),
-            ),
-          );
-        }),
-      ],
-    );
-  }
-}
-
-// ── Grid de assistência ───────────────────────────────────────────────────────
-
-class _AssistGrid extends StatelessWidget {
-  final List<MatchPlayerInfo> allPlayers;
-  final String  scorerMpId;
-  final String? assistMpId;
-  final ValueChanged<String?> onTap;
-
-  const _AssistGrid({
-    required this.allPlayers,
-    required this.scorerMpId,
-    required this.assistMpId,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final candidates = allPlayers.where((p) => p.matchPlayerId != scorerMpId).toList();
-    return Wrap(
-      spacing: 6,
-      runSpacing: 6,
-      children: [
-        // Nenhuma assistência
-        GestureDetector(
-          onTap: () => onTap(null),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: assistMpId == null ? AppColors.slate500 : AppColors.slate200),
-              color: assistMpId == null ? AppColors.slate100 : Colors.transparent,
-            ),
-            child: const Text('—', style: TextStyle(fontSize: 12)),
-          ),
         ),
-        ...candidates.map((p) {
-          final isSel = p.matchPlayerId == assistMpId;
-          return GestureDetector(
-            onTap: () => onTap(isSel ? null : p.matchPlayerId),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: isSel ? AppColors.blue500 : AppColors.slate200),
-                color: isSel ? AppColors.blue200.withValues(alpha: 0.3) : Colors.transparent,
-              ),
-              child: Text(
-                p.playerName,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: isSel ? FontWeight.w600 : FontWeight.w400,
-                  color: isSel ? AppColors.blue600 : AppColors.slate700,
-                ),
-              ),
-            ),
-          );
-        }),
-      ],
+      ),
     );
   }
 }

@@ -12,6 +12,7 @@ class GoalEntryRow extends StatelessWidget {
   final bool isAdmin;
   final bool loading;
   final VoidCallback? onRemove;
+  final VoidCallback? onEdit;
 
   const GoalEntryRow({
     super.key,
@@ -23,6 +24,7 @@ class GoalEntryRow extends StatelessWidget {
     this.isAdmin  = false,
     this.loading  = false,
     this.onRemove,
+    this.onEdit,
   });
 
   @override
@@ -104,20 +106,33 @@ class GoalEntryRow extends StatelessWidget {
                 ],
               ),
             ),
-            // Botão remover (admin)
+            // Botões editar/remover (admin)
             if (isAdmin)
-              loading
-                  ? const SizedBox(
-                      width: 20, height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : IconButton(
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  loading
+                      ? const SizedBox(
+                          width: 20, height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : IconButton(
+                          icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.slate400),
+                          onPressed: onEdit,
+                          tooltip: 'Editar gol',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                        ),
+                  if (!loading)
+                    IconButton(
                       icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.rose400),
                       onPressed: onRemove,
                       tooltip: 'Remover gol',
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                     ),
+                ],
+              ),
           ],
         ),
       ),

@@ -82,6 +82,14 @@ class _AdminUsersPageState extends ConsumerState<_AdminUsersPage> {
             ),
           ),
 
+          // ── Convites de patota (admin também pode ser convidado) ────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+              child: _InvitesCard(isDark: isDark),
+            ),
+          ),
+
           // ── Search bar ───────────────────────────────────────────────────
           SliverToBoxAdapter(
             child: Padding(

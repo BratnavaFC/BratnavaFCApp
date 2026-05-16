@@ -5,6 +5,7 @@ import '../../../auth/presentation/providers/account_store.dart';
 import '../../domain/entities/match_models.dart';
 import '../providers/match_provider.dart';
 import '../widgets/goal_entry_row.dart';
+import '../widgets/inline_goal_tracker.dart';
 
 class Step6PosJogoPage extends ConsumerStatefulWidget {
   const Step6PosJogoPage({super.key});
@@ -19,6 +20,19 @@ class _Step6State extends ConsumerState<Step6PosJogoPage> {
   String? _voterMpId;
   String? _votedMpId;
   bool _scoreInited = false;
+
+  int     _goalMinute = 0;
+  String? _scorerMpId;
+  String? _assistMpId;
+  bool    _isOwnGoal  = false;
+  String? _editingGoalId;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _goalMinute = now.hour * 60 + now.minute;
+  }
 
   bool get _isAdmin {
     final acc = ref.read(accountStoreProvider).activeAccount;
@@ -50,6 +64,66 @@ class _Step6State extends ConsumerState<Step6PosJogoPage> {
     }
   }
 
+  void _resetGoalForm() {
+    final now = DateTime.now();
+    setState(() {
+      _editingGoalId = null;
+      _goalMinute    = now.hour * 60 + now.minute;
+      _scorerMpId    = null;
+      _assistMpId    = null;
+      _isOwnGoal     = false;
+    });
+  }
+
+  void _editGoal(MatchGoal goal, List<MatchPlayerInfo> allPlayers) {
+    int minutes = 0;
+    if (goal.time != null) {
+      final parts = goal.time!.split(':');
+      if (parts.length >= 2) {
+        minutes = (int.tryParse(parts[0]) ?? 0) * 60 + (int.tryParse(parts[1]) ?? 0);
+      }
+    }
+    final scorerMpId = goal.scorerMatchPlayerId ??
+        allPlayers.where((p) => p.playerId == goal.scorerPlayerId).firstOrNull?.matchPlayerId;
+    final assistMpId = goal.assistMatchPlayerId ??
+        allPlayers.where((p) => p.playerId == goal.assistPlayerId).firstOrNull?.matchPlayerId;
+    setState(() {
+      _editingGoalId = goal.goalId;
+      _goalMinute    = minutes;
+      _scorerMpId    = scorerMpId;
+      _assistMpId    = assistMpId;
+      _isOwnGoal     = goal.isOwnGoal;
+    });
+  }
+
+  Future<void> _saveGoal(List<MatchPlayerInfo> allPlayers) async {
+    if (_scorerMpId == null) return;
+    final scorer = allPlayers.where((p) => p.matchPlayerId == _scorerMpId).firstOrNull;
+    if (scorer == null) return;
+    final assist = _assistMpId != null
+        ? allPlayers.where((p) => p.matchPlayerId == _assistMpId).firstOrNull
+        : null;
+    final timeStr = '${(_goalMinute ~/ 60).toString().padLeft(2, '0')}:${(_goalMinute % 60).toString().padLeft(2, '0')}';
+
+    if (_editingGoalId != null) {
+      await ref.read(matchNotifierProvider.notifier).updateGoal(
+        goalId:         _editingGoalId!,
+        scorerPlayerId: scorer.playerId,
+        assistPlayerId: assist?.playerId,
+        time:           timeStr,
+        isOwnGoal:      _isOwnGoal,
+      );
+    } else {
+      await ref.read(matchNotifierProvider.notifier).addGoal(
+        scorerPlayerId: scorer.playerId,
+        assistPlayerId: assist?.playerId,
+        time:           timeStr,
+        isOwnGoal:      _isOwnGoal,
+      );
+    }
+    _resetGoalForm();
+  }
+
   Future<void> _saveScore() async {
     final a = int.tryParse(_scoreACtrl.text);
     final b = int.tryParse(_scoreBCtrl.text);
@@ -63,11 +137,37 @@ class _Step6State extends ConsumerState<Step6PosJogoPage> {
   }
 
   Future<void> _vote() async {
-    if (_voterMpId == null || _votedMpId == null) return;
-    await ref.read(matchNotifierProvider.notifier).voteMvp(_voterMpId!, _votedMpId!);
-    if (mounted) {
+    if (_votedMpId == null) return;
+    final s = ref.read(matchNotifierProvider);
+    final allPlayers = [...s.participants, ...s.eligibleVoters];
+
+    // Para não-admin o voter é sempre o próprio usuário (derivado do estado atual).
+    final effectiveVoterMpId = _isAdmin
+        ? _voterMpId
+        : allPlayers.where((p) => p.playerId == _myPlayerId).firstOrNull?.matchPlayerId;
+
+    if (effectiveVoterMpId == null) return;
+
+    final voter = allPlayers.where((p) => p.matchPlayerId == effectiveVoterMpId).firstOrNull;
+    final voted = allPlayers.where((p) => p.matchPlayerId == _votedMpId).firstOrNull;
+    if (voter == null || voted == null) return;
+
+    final ok = await ref.read(matchNotifierProvider.notifier).voteMvp(voter.matchPlayerId, voted.matchPlayerId);
+    if (!mounted) return;
+
+    if (ok) {
+      // Limpa seleção do admin para o próximo voto.
+      setState(() {
+        _voterMpId = null;
+        _votedMpId = null;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Voto registrado!')),
+      );
+    } else {
+      final err = ref.read(matchNotifierProvider).error ?? 'Erro desconhecido';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Falha: $err'), backgroundColor: Colors.red),
       );
     }
   }
@@ -75,12 +175,12 @@ class _Step6State extends ConsumerState<Step6PosJogoPage> {
   Future<void> _finalize() async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('Finalizar partida?'),
         content: const Text('Os dados não poderão ser alterados após a finalização.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Finalizar')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Finalizar')),
         ],
       ),
     );
@@ -209,6 +309,7 @@ class _Step6State extends ConsumerState<Step6PosJogoPage> {
                     teamAColor: s.teamAColor?.color,
                     teamBColor: s.teamBColor?.color,
                     isAdmin:    false,
+                    onEdit:     null,
                     onRemove:   null,
                   )).toList(),
                 ),
@@ -238,15 +339,8 @@ class _Step6State extends ConsumerState<Step6PosJogoPage> {
           );
         }
 
-        // Convidado — não pode votar
-        if (!canVote) {
-          return const Text(
-            'Convidados não participam da votação. Aguardando resultado...',
-            style: TextStyle(fontSize: 13, color: AppColors.slate400),
-          );
-        }
-
-        // Já votou
+        // Já votou — checado antes de canVote porque ao votar o jogador
+        // sai de eligibleVoters (canVote = false), mas o voto já está em s.votes.
         if (hasVoted) {
           final votedPlayer = s.participants
               .where((p) => p.matchPlayerId == myVote!.votedMatchPlayerId)
@@ -289,6 +383,14 @@ class _Step6State extends ConsumerState<Step6PosJogoPage> {
                 ),
               ],
             ),
+          );
+        }
+
+        // Convidado — não pode votar
+        if (!canVote) {
+          return const Text(
+            'Convidados não participam da votação. Aguardando resultado...',
+            style: TextStyle(fontSize: 13, color: AppColors.slate400),
           );
         }
 
@@ -520,19 +622,58 @@ class _Step6State extends ConsumerState<Step6PosJogoPage> {
         // ── 3. Gols ───────────────────────────────────────────────────────
         _SectionCard(
           title: 'Gols da Partida',
-          child: s.goals.isEmpty
-              ? const Text('Nenhum gol registrado.', style: TextStyle(color: AppColors.slate400))
-              : Column(
-                  children: s.goals.map((g) => GoalEntryRow(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Goal form
+              () {
+                final teamA = s.participants.where((p) => p.team == 1).toList();
+                final teamB = s.participants.where((p) => p.team == 2).toList();
+                final allParticipants = s.participants.isNotEmpty
+                    ? s.participants
+                    : [...s.teamAPlayers, ...s.teamBPlayers];
+                return InlineGoalTracker(
+                  minute:     _goalMinute,
+                  scorerMpId: _scorerMpId,
+                  assistMpId: _assistMpId,
+                  isOwnGoal:  _isOwnGoal,
+                  isEditing:  _editingGoalId != null,
+                  teamAPlayers: teamA.isNotEmpty ? teamA : allParticipants,
+                  teamBPlayers: teamB,
+                  teamAName:  s.teamAColor?.name ?? 'Time A',
+                  teamBName:  s.teamBColor?.name ?? 'Time B',
+                  teamAColor: s.teamAColor?.color,
+                  teamBColor: s.teamBColor?.color,
+                  mutating:   s.mutating,
+                  onMinuteChanged: (v) => setState(() => _goalMinute = v),
+                  onScorerChanged: (id) => setState(() { _scorerMpId = id; _assistMpId = null; }),
+                  onAssistChanged: (id) => setState(() => _assistMpId = id),
+                  onOwnGoalChanged: (v) => setState(() => _isOwnGoal = v),
+                  onSave: () => _saveGoal(s.participants.isNotEmpty ? s.participants : [...s.teamAPlayers, ...s.teamBPlayers]),
+                  onCancel: _resetGoalForm,
+                );
+              }(),
+              const SizedBox(height: 8),
+              if (s.goals.isEmpty)
+                const Text('Nenhum gol registrado.', style: TextStyle(color: AppColors.slate400))
+              else
+                ...s.goals.map((g) {
+                  final allParticipants = s.participants.isNotEmpty
+                      ? s.participants
+                      : [...s.teamAPlayers, ...s.teamBPlayers];
+                  return GoalEntryRow(
                     goal:       g,
                     teamAName:  s.teamAColor?.name ?? 'Time A',
                     teamBName:  s.teamBColor?.name ?? 'Time B',
                     teamAColor: s.teamAColor?.color,
                     teamBColor: s.teamBColor?.color,
                     isAdmin:    true,
+                    onEdit:     () => _editGoal(g, allParticipants),
                     onRemove:   () => ref.read(matchNotifierProvider.notifier).removeGoal(g.goalId),
-                  )).toList(),
-                ),
+                  );
+                }),
+            ],
+          ),
         ),
 
         const SizedBox(height: 80),

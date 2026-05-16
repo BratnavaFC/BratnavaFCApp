@@ -133,6 +133,8 @@ class MatchGoal {
   final String? time;
   final int team; // 1=A, 2=B
   final bool isOwnGoal;
+  final String? scorerMatchPlayerId;
+  final String? assistMatchPlayerId;
 
   const MatchGoal({
     required this.goalId,
@@ -143,6 +145,8 @@ class MatchGoal {
     this.time,
     required this.team,
     required this.isOwnGoal,
+    this.scorerMatchPlayerId,
+    this.assistMatchPlayerId,
   });
 
   factory MatchGoal.fromJson(Map<String, dynamic> j) => MatchGoal(
@@ -154,6 +158,8 @@ class MatchGoal {
     time:           j['time']           as String? ?? j['Time']           as String?,
     team:           j['team']           as int?    ?? j['Team']           as int?    ?? 0,
     isOwnGoal:      j['isOwnGoal']      as bool?   ?? j['IsOwnGoal']      as bool?   ?? false,
+    scorerMatchPlayerId: (j['scorerMatchPlayerId'] ?? j['ScorerMatchPlayerId'])?.toString(),
+    assistMatchPlayerId: (j['assistMatchPlayerId'] ?? j['AssistMatchPlayerId'])?.toString(),
   );
 }
 
@@ -178,8 +184,8 @@ class VoteInfo {
   const VoteInfo({required this.voterMatchPlayerId, required this.votedMatchPlayerId});
 
   factory VoteInfo.fromJson(Map<String, dynamic> j) => VoteInfo(
-    voterMatchPlayerId: (j['voterPlayerId'] ?? j['VoterPlayerId'] ?? '').toString(),
-    votedMatchPlayerId: (j['votedPlayerId'] ?? j['VotedPlayerId'] ?? '').toString(),
+    voterMatchPlayerId: (j['voterMatchPlayerId'] ?? j['VoterMatchPlayerId'] ?? '').toString(),
+    votedMatchPlayerId: (j['votedForMatchPlayerId'] ?? j['VotedForMatchPlayerId'] ?? '').toString(),
   );
 }
 
@@ -192,9 +198,9 @@ class VoteCount {
   const VoteCount({required this.matchPlayerId, required this.playerName, required this.count});
 
   factory VoteCount.fromJson(Map<String, dynamic> j) => VoteCount(
-    matchPlayerId: (j['matchPlayerId'] ?? j['MatchPlayerId'] ?? '').toString(),
-    playerName:    j['playerName']     as String? ?? j['PlayerName']     as String? ?? '',
-    count:         j['count']          as int?    ?? j['Count']          as int?    ?? 0,
+    matchPlayerId: (j['votedForMatchPlayerId'] ?? j['VotedForMatchPlayerId'] ?? '').toString(),
+    playerName:    j['votedForName']  as String? ?? j['VotedForName']  as String? ?? '',
+    count:         j['count']         as int?    ?? j['Count']         as int?    ?? 0,
   );
 }
 

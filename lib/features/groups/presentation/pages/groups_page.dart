@@ -459,6 +459,10 @@ class _GroupsPageState extends ConsumerState<GroupsPage> {
           await _loadMine();
           await _loadAdminGroups();
           ref.read(authNotifierProvider.notifier).refreshRoles();
+          // Abre automaticamente se agora há exatamente uma patota
+          if (_myGroups.length == 1) {
+            _openGroup(_myGroups.first['groupId']!);
+          }
         },
       ),
     );
@@ -3523,6 +3527,28 @@ class _EditPlayerSheetState extends State<_EditPlayerSheet> {
 // Invite
 // ─────────────────────────────────────────────────────────────────────────────
 
+class _PendingInviteItem {
+  final String inviteId;
+  final String userId;
+  final String fullName;
+  final String userName;
+
+  const _PendingInviteItem({
+    required this.inviteId,
+    required this.userId,
+    required this.fullName,
+    required this.userName,
+  });
+
+  factory _PendingInviteItem.fromJson(Map<String, dynamic> j) =>
+      _PendingInviteItem(
+        inviteId: j['id']                 as String? ?? '',
+        userId:   j['targetUserId']       as String? ?? '',
+        fullName: j['targetUserFullName'] as String? ?? '',
+        userName: j['targetUserLogin']    as String? ?? '',
+      );
+}
+
 class _InviteSheet extends StatefulWidget {
   final Dio dio;
   final String groupId;
@@ -3545,15 +3571,37 @@ class _InviteSheet extends StatefulWidget {
 class _InviteSheetState extends State<_InviteSheet> {
   final _searchCtrl = TextEditingController();
   Timer? _debounce;
-  bool _loading = false;
-  bool _hasTried = false; // true after first search fired
+  bool _loading        = false;
+  bool _pendingLoading = false;
+  bool _hasTried       = false;
   String? _err;
-  List<_UserResult> _results = [];
+  List<_UserResult>        _results      = [];
+  List<_PendingInviteItem> _pendingItems = [];
+
+  Set<String> get _pendingUserIds => _pendingItems.map((e) => e.userId).toSet();
 
   @override
   void initState() {
     super.initState();
     _searchCtrl.addListener(_onTextChanged);
+    _loadPendingInvites();
+  }
+
+  Future<void> _loadPendingInvites() async {
+    if (mounted) setState(() => _pendingLoading = true);
+    try {
+      final res  = await widget.dio.get(ApiConstants.groupPendingInvites(widget.groupId));
+      final raw  = _GroupsPageState._unwrap(res.data);
+      final list = raw is List ? raw : [];
+      final items = list
+          .map((e) => _PendingInviteItem.fromJson(e as Map<String, dynamic>))
+          .toList();
+      if (mounted) setState(() => _pendingItems = items);
+    } catch (_) {
+      // silently ignore
+    } finally {
+      if (mounted) setState(() => _pendingLoading = false);
+    }
   }
 
   void _onTextChanged() {
@@ -3609,6 +3657,10 @@ class _InviteSheetState extends State<_InviteSheet> {
   }
 
   Future<void> _invite(_UserResult user) async {
+    // Captura antes de qualquer await para funcionar mesmo após Navigator.pop
+    final messenger   = ScaffoldMessenger.of(context);
+    final displayName = user.fullName.isNotEmpty ? user.fullName : user.userName;
+
     // If there are unlinked guests, ask whether to associate this user with one.
     String? guestPlayerId;
     if (widget.guestPlayers.isNotEmpty && mounted) {
@@ -3631,26 +3683,71 @@ class _InviteSheetState extends State<_InviteSheet> {
       }
     }
 
-    setState(() {
-      _loading = true;
-      _err = null;
-    });
+    setState(() => _loading = true);
 
     try {
       await widget.dio.post(
         ApiConstants.groupInvites(widget.groupId),
         data: {
-          'userId': user.id,
+          'targetUserId': user.id,
           if (guestPlayerId != null) 'guestPlayerId': guestPlayerId,
         },
       );
 
+      await _loadPendingInvites();
       await widget.onInvited();
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(
+          content: Text('Convite enviado para $displayName.'),
+          backgroundColor: const Color(0xFF16A34A),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ));
       if (mounted) Navigator.pop(context);
     } catch (e) {
-      setState(() => _err = _extractError(e));
+      final errMsg    = _extractError(e);
+      final isPending = errMsg.toLowerCase().contains('pendente');
+      if (isPending) await _loadPendingInvites();
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(
+          content: Text(errMsg),
+          backgroundColor: isPending
+              ? const Color(0xFFF59E0B)
+              : const Color(0xFFE11D48),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ));
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _cancelInvite(_PendingInviteItem item) async {
+    final messenger   = ScaffoldMessenger.of(context);
+    final displayName = item.fullName.isNotEmpty ? item.fullName : item.userName;
+    try {
+      await widget.dio.delete(
+        ApiConstants.groupCancelInvite(widget.groupId, item.inviteId),
+      );
+      await _loadPendingInvites();
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(
+          content: Text('Convite de $displayName cancelado.'),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ));
+    } catch (e) {
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(
+          content: Text(_extractError(e)),
+          backgroundColor: const Color(0xFFE11D48),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ));
     }
   }
 
@@ -3658,186 +3755,308 @@ class _InviteSheetState extends State<_InviteSheet> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return _ModalSheet(
-      isDark: isDark,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _SheetHeader(
-            icon: Icons.person_add_alt_1_outlined,
-            iconBg: const Color(0xFF0F172A),
-            title: 'Convidar jogador',
-            subtitle: 'Busque por nome, usuário ou email',
-            isDark: isDark,
-          ),
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              children: [
-                _AppInput(
-                  controller: _searchCtrl,
-                  hint: 'Pesquisar...',
-                  enabled: !_loading,
-                  isDark: isDark,
-                ),
-                if (_err != null) ...[
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      _err!,
-                      style: const TextStyle(color: Color(0xFFEF4444)),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 16),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 360),
-                  child: _loading
-                      ? const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(20),
-                            child: CircularProgressIndicator(),
+    return DefaultTabController(
+      length: 2,
+      child: _ModalSheet(
+        isDark: isDark,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _SheetHeader(
+              icon:     Icons.person_add_alt_1_outlined,
+              iconBg:   const Color(0xFF0F172A),
+              title:    'Convidar jogador',
+              subtitle: 'Busque por nome, usuário ou email',
+              isDark:   isDark,
+            ),
+            TabBar(
+              tabs: [
+                const Tab(text: 'Convidar'),
+                Tab(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('Pendentes'),
+                      if (_pendingItems.isNotEmpty) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF59E0B).withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(10),
                           ),
-                        )
-                      : _results.isEmpty
-                          ? _hasTried
-                              ? Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 20),
-                                  child: Text(
-                                    'Nenhum resultado.',
-                                    style: TextStyle(
-                                      color: isDark
-                                          ? const Color(0xFF94A3B8)
-                                          : const Color(0xFF64748B),
-                                    ),
-                                  ),
-                                )
-                              : const SizedBox.shrink()
-                          : ListView.separated(
-                              shrinkWrap: true,
-                              itemCount: _results.length,
-                              separatorBuilder: (_, __) => const SizedBox(height: 8),
-                              itemBuilder: (context, index) {
-                                final user = _results[index];
-                                final name = user.fullName.isEmpty
-                                    ? user.userName
-                                    : user.fullName;
-
-                                final isMember = widget.existingUserIds.contains(user.id);
-                                return Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: isDark
-                                        ? const Color(0xFF0F172A)
-                                        : const Color(0xFFF8FAFC),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: isDark
-                                          ? Colors.white.withValues(alpha: 0.08)
-                                          : const Color(0xFFE2E8F0),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      CircleAvatar(
-                                        radius: 18,
-                                        backgroundColor: isDark
-                                            ? const Color(0xFF334155)
-                                            : const Color(0xFFE2E8F0),
-                                        child: Text(
-                                          name.isEmpty ? '?' : name[0].toUpperCase(),
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                            color: isDark
-                                                ? Colors.white
-                                                : const Color(0xFF0F172A),
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              name,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.w600,
-                                                color: isDark
-                                                    ? Colors.white
-                                                    : const Color(0xFF0F172A),
-                                              ),
-                                            ),
-                                            Text(
-                                              '@${user.userName}',
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                color: isDark
-                                                    ? const Color(0xFF94A3B8)
-                                                    : const Color(0xFF64748B),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      if (isMember)
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 10,
-                                            vertical: 6,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: isDark
-                                                ? const Color(0xFF1E293B)
-                                                : const Color(0xFFE2E8F0),
-                                            borderRadius: BorderRadius.circular(8),
-                                          ),
-                                          child: Text(
-                                            'Membro',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w500,
-                                              color: isDark
-                                                  ? const Color(0xFF94A3B8)
-                                                  : const Color(0xFF475569),
-                                            ),
-                                          ),
-                                        )
-                                      else
-                                        ElevatedButton(
-                                          onPressed: _loading ? null : () => _invite(user),
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: const Color(0xFF0F172A),
-                                            foregroundColor: Colors.white,
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 14,
-                                              vertical: 8,
-                                            ),
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius: BorderRadius.circular(8),
-                                            ),
-                                          ),
-                                          child: const Text(
-                                            'Convidar',
-                                            style: TextStyle(fontSize: 13),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                );
-                              },
+                          child: Text(
+                            '${_pendingItems.length}',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFFF59E0B),
                             ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+              labelColor: isDark ? Colors.white : const Color(0xFF0F172A),
+              unselectedLabelColor:
+                  isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+              indicatorColor: const Color(0xFF0F172A),
+              dividerColor:
+                  isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+            ),
+            Flexible(
+              child: TabBarView(
+                children: [
+                  _buildSearchTab(isDark),
+                  _buildPendingTab(isDark),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchTab(bool isDark) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        children: [
+          _AppInput(
+            controller: _searchCtrl,
+            hint:    'Pesquisar...',
+            enabled: !_loading,
+            isDark:  isDark,
+          ),
+          if (_err != null) ...[
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(_err!,
+                  style: const TextStyle(color: Color(0xFFEF4444))),
+            ),
+          ],
+          const SizedBox(height: 16),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 360),
+            child: _loading
+                ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(20),
+                      child: CircularProgressIndicator(),
+                    ),
+                  )
+                : _results.isEmpty
+                    ? _hasTried
+                        ? Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 20),
+                            child: Text(
+                              'Nenhum resultado.',
+                              style: TextStyle(
+                                color: isDark
+                                    ? const Color(0xFF94A3B8)
+                                    : const Color(0xFF64748B),
+                              ),
+                            ),
+                          )
+                        : const SizedBox.shrink()
+                    : ListView.separated(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: _results.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        itemBuilder: (context, index) {
+                          final user     = _results[index];
+                          final name     = user.fullName.isEmpty
+                              ? user.userName : user.fullName;
+                          final isMember = widget.existingUserIds.contains(user.id);
+                          final isPending = _pendingUserIds.contains(user.id);
+                          return _buildUserRow(
+                            isDark:   isDark,
+                            name:     name,
+                            userName: user.userName,
+                            trailing: isMember
+                                ? _StatusBadge(label: 'Membro', isDark: isDark)
+                                : isPending
+                                    ? _StatusBadge(
+                                        label: 'Pendente',
+                                        isDark: isDark,
+                                        color: const Color(0xFFF59E0B),
+                                      )
+                                    : ElevatedButton(
+                                        onPressed:
+                                            _loading ? null : () => _invite(user),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFF0F172A),
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 14, vertical: 8),
+                                          shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(8)),
+                                        ),
+                                        child: const Text('Convidar',
+                                            style: TextStyle(fontSize: 13)),
+                                      ),
+                          );
+                        },
+                      ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPendingTab(bool isDark) {
+    if (_pendingLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_pendingItems.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Text(
+            'Nenhum convite pendente.',
+            style: TextStyle(
+              color: isDark
+                  ? const Color(0xFF94A3B8)
+                  : const Color(0xFF64748B),
+            ),
+          ),
+        ),
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.all(20),
+      itemCount: _pendingItems.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (context, i) {
+        final item = _pendingItems[i];
+        final name = item.fullName.isNotEmpty ? item.fullName : item.userName;
+        return _buildUserRow(
+          isDark:   isDark,
+          name:     name,
+          userName: item.userName,
+          trailing: TextButton.icon(
+            onPressed: () => _cancelInvite(item),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFFEF4444),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+            icon:  const Icon(Icons.close, size: 16),
+            label: const Text('Cancelar', style: TextStyle(fontSize: 13)),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildUserRow({
+    required bool isDark,
+    required String name,
+    required String userName,
+    required Widget trailing,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.08)
+              : const Color(0xFFE2E8F0),
+        ),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 18,
+            backgroundColor:
+                isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+            child: Text(
+              name.isEmpty ? '?' : name[0].toUpperCase(),
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.white : const Color(0xFF0F172A),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                  ),
+                ),
+                Text(
+                  '@$userName',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark
+                        ? const Color(0xFF94A3B8)
+                        : const Color(0xFF64748B),
+                  ),
                 ),
               ],
             ),
           ),
+          const SizedBox(width: 8),
+          trailing,
         ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Status badge (Membro / Pendente)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _StatusBadge extends StatelessWidget {
+  final String label;
+  final bool isDark;
+  final Color? color;
+
+  const _StatusBadge({required this.label, required this.isDark, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = color != null
+        ? color!.withValues(alpha: 0.15)
+        : (isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0));
+    final fg = color ??
+        (isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569));
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          color: fg,
+        ),
       ),
     );
   }

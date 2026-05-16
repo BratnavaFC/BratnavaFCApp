@@ -33,8 +33,11 @@ class ApiConstants {
   static String playerRemoveFromGroup(String id)   => '/api/Players/$id/remove-from-group';
 
   // Group invites
-  static String groupInvites(String groupId)          => '/api/Groups/$groupId/invites';
-  static const String myGroupInvites                  = '/api/Groups/invites/mine';
+  static String groupInvites(String groupId)            => '/api/Groups/$groupId/invites';
+  static String groupPendingInvites(String groupId)     => '/api/Groups/$groupId/invites/pending';
+  static String groupCancelInvite(String groupId, String inviteId) =>
+      '/api/Groups/$groupId/invites/$inviteId';
+  static const String myGroupInvites                    = '/api/Groups/invites/mine';
   static const String myGroupInvitesCount             = '/api/Groups/invites/mine/count';
   static String groupInviteAccept(String inviteId)    => '/api/Groups/invites/$inviteId/accept';
   static String groupInviteReject(String inviteId)    => '/api/Groups/invites/$inviteId/reject';

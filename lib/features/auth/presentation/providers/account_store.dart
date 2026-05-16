@@ -28,7 +28,10 @@ class AccountState {
     }
   }
 
-  bool get isLoggedIn => activeAccount != null;
+  bool get isLoggedIn {
+    final a = activeAccount;
+    return a != null && a.accessToken.isNotEmpty;
+  }
 
   AccountState copyWith({
     List<Account>? accounts,
@@ -155,6 +158,15 @@ class AccountStore extends StateNotifier<AccountState> {
     final active = state.activeAccount;
     if (active == null) return;
     await upsertAccount(updater(active));
+  }
+
+  /// Limpa os tokens da conta ativa sem removê-la da lista.
+  /// Usado quando o refresh falha — a conta permanece para re-autenticação.
+  /// isLoggedIn retorna false, o que faz o router redirecionar para /login.
+  Future<void> clearActiveTokens() async {
+    final active = state.activeAccount;
+    if (active == null) return;
+    await upsertAccount(active.copyWith(accessToken: '', refreshToken: ''));
   }
 
   /// Faz logout da conta ativa. Se houver outra, troca para ela.

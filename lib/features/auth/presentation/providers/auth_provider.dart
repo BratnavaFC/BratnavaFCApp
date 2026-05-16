@@ -17,13 +17,21 @@ import 'account_store.dart';
 final authInterceptorProvider = Provider<AuthInterceptor>((ref) {
   final notifier = ref.read(accountStoreProvider.notifier);
   return AuthInterceptor(
-    getAccessToken:  () => ref.read(accountStoreProvider).activeAccount?.accessToken,
-    getRefreshToken: () => ref.read(accountStoreProvider).activeAccount?.refreshToken,
+    getAccessToken: () {
+      final t = ref.read(accountStoreProvider).activeAccount?.accessToken;
+      return (t == null || t.isEmpty) ? null : t;
+    },
+    getRefreshToken: () {
+      final t = ref.read(accountStoreProvider).activeAccount?.refreshToken;
+      return (t == null || t.isEmpty) ? null : t;
+    },
     onTokensRefreshed: (access, refresh) async {
       await notifier.updateTokens(access, refresh);
     },
     onUnauthorized: () async {
-      await notifier.logout();
+      // Limpa os tokens sem remover a conta — o router redireciona para /login
+      // e a conta permanece na lista para re-autenticação.
+      await notifier.clearActiveTokens();
     },
   );
 });

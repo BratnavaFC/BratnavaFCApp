@@ -18,16 +18,19 @@ class CalendarRemoteDataSource {
   }
 
   Future<void> createEvent(String groupId, Map<String, dynamic> dto) async {
-    await _dio.post(ApiConstants.calendarEvents2(groupId), data: dto);
+    final res = await _dio.post(ApiConstants.calendarEvents2(groupId), data: dto);
+    _throwIfError(res.data);
   }
 
   Future<void> updateEvent(
       String groupId, String id, Map<String, dynamic> dto) async {
-    await _dio.put(ApiConstants.calendarEventById(groupId, id), data: dto);
+    final res = await _dio.put(ApiConstants.calendarEventById(groupId, id), data: dto);
+    _throwIfError(res.data);
   }
 
   Future<void> deleteEvent(String groupId, String id) async {
-    await _dio.delete(ApiConstants.calendarEventById(groupId, id));
+    final res = await _dio.delete(ApiConstants.calendarEventById(groupId, id));
+    _throwIfError(res.data);
   }
 
   // ── Categories ────────────────────────────────────────────────────────────
@@ -41,19 +44,29 @@ class CalendarRemoteDataSource {
   }
 
   Future<void> createCategory(String groupId, Map<String, dynamic> dto) async {
-    await _dio.post(ApiConstants.calendarCategories(groupId), data: dto);
+    final res = await _dio.post(ApiConstants.calendarCategories(groupId), data: dto);
+    _throwIfError(res.data);
   }
 
   Future<void> updateCategory(
       String groupId, String id, Map<String, dynamic> dto) async {
-    await _dio.put(ApiConstants.calendarCategoryById(groupId, id), data: dto);
+    final res = await _dio.put(ApiConstants.calendarCategoryById(groupId, id), data: dto);
+    _throwIfError(res.data);
   }
 
   Future<void> deleteCategory(String groupId, String id) async {
-    await _dio.delete(ApiConstants.calendarCategoryById(groupId, id));
+    final res = await _dio.delete(ApiConstants.calendarCategoryById(groupId, id));
+    _throwIfError(res.data);
   }
 
   // ── Helper ────────────────────────────────────────────────────────────────
+
+  void _throwIfError(dynamic data) {
+    if (data is Map) {
+      final msg = data['error'] as String?;
+      if (msg != null && msg.isNotEmpty) throw Exception(msg);
+    }
+  }
 
   dynamic _unwrap(dynamic data) {
     if (data is List) return data;

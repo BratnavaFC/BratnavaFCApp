@@ -38,10 +38,19 @@ class NotificationsDatasource {
   }
 
   Future<void> markRead(String notificationId) async {
-    await _dio.patch(ApiConstants.notificationMarkRead(notificationId));
+    final res = await _dio.patch(ApiConstants.notificationMarkRead(notificationId));
+    _throwIfError(res.data);
   }
 
   Future<void> markAllRead() async {
-    await _dio.patch(ApiConstants.notificationsMarkAllRead);
+    final res = await _dio.patch(ApiConstants.notificationsMarkAllRead);
+    _throwIfError(res.data);
+  }
+
+  void _throwIfError(dynamic data) {
+    if (data is Map) {
+      final msg = data['error'] as String?;
+      if (msg != null && msg.isNotEmpty) throw Exception(msg);
+    }
   }
 }

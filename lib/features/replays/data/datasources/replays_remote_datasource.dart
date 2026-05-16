@@ -63,7 +63,8 @@ class ReplaysRemoteDataSource {
   }
 
   Future<void> deleteClip(String groupId, String clipId) async {
-    await _dio.delete(_delete(groupId, clipId));
+    final res = await _dio.delete(_delete(groupId, clipId));
+    _throwIfError(res.data);
   }
 
   /// Returns the relative stream path (caller appends base URL + token).
@@ -71,6 +72,13 @@ class ReplaysRemoteDataSource {
       _stream(groupId, clipId);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
+
+  void _throwIfError(dynamic data) {
+    if (data is Map) {
+      final msg = data['error'] as String?;
+      if (msg != null && msg.isNotEmpty) throw Exception(msg);
+    }
+  }
 
   List<dynamic> _unwrapList(dynamic data) {
     if (data is List) return data;

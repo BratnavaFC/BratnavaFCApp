@@ -26,11 +26,13 @@ class GodModeRemoteDataSource {
   }
 
   Future<void> inactivateUser(String userId) async {
-    await _dio.put('/api/users/$userId/inactivate');
+    final res = await _dio.put('/api/users/$userId/inactivate');
+    _throwIfError(res.data);
   }
 
   Future<void> reactivateUser(String userId) async {
-    await _dio.put('/api/users/$userId/reactivate');
+    final res = await _dio.put('/api/users/$userId/reactivate');
+    _throwIfError(res.data);
   }
 
   Future<void> changeUserPassword(
@@ -38,17 +40,19 @@ class GodModeRemoteDataSource {
     required String currentPassword,
     required String newPassword,
   }) async {
-    await _dio.put(
+    final res = await _dio.put(
       '/api/users/$userId/password',
       data: {
         'currentPassword': currentPassword,
         'newPassword': newPassword,
       },
     );
+    _throwIfError(res.data);
   }
 
   Future<void> updateUser(String userId, Map<String, dynamic> dto) async {
-    await _dio.put('/api/users/$userId', data: dto);
+    final res = await _dio.put('/api/users/$userId', data: dto);
+    _throwIfError(res.data);
   }
 
   // ── Groups ────────────────────────────────────────────────────────────────
@@ -62,14 +66,23 @@ class GodModeRemoteDataSource {
   }
 
   Future<void> inactivateGroup(String groupId) async {
-    await _dio.put('/api/groups/$groupId/inactivate');
+    final res = await _dio.put('/api/groups/$groupId/inactivate');
+    _throwIfError(res.data);
   }
 
   Future<void> reactivateGroup(String groupId) async {
-    await _dio.put('/api/groups/$groupId/reactivate');
+    final res = await _dio.put('/api/groups/$groupId/reactivate');
+    _throwIfError(res.data);
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
+
+  void _throwIfError(dynamic data) {
+    if (data is Map) {
+      final msg = data['error'] as String?;
+      if (msg != null && msg.isNotEmpty) throw Exception(msg);
+    }
+  }
 
   PagedResult<UserItemListDto> _parsePagedUsers(dynamic data) {
     // Handles: { success, data: { items, totalCount, page, pageSize } }

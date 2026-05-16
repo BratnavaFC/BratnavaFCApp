@@ -45,6 +45,7 @@ class PaymentsRemoteDataSource {
 
   Future<String?> upsertMonthly(String groupId, Map<String, dynamic> dto) async {
     final res = await _dio.put(ApiConstants.upsertMonthly(groupId), data: dto);
+    _throwIfError(res.data);
     return _message(res.data);
   }
 
@@ -77,12 +78,14 @@ class PaymentsRemoteDataSource {
       String groupId, Map<String, dynamic> dto) async {
     final res =
         await _dio.post(ApiConstants.extraCharges(groupId), data: dto);
+    _throwIfError(res.data);
     return _message(res.data);
   }
 
   Future<String?> cancelExtraCharge(String groupId, String chargeId) async {
     final res =
         await _dio.delete(ApiConstants.extraChargeById(groupId, chargeId));
+    _throwIfError(res.data);
     return _message(res.data);
   }
 
@@ -90,6 +93,7 @@ class PaymentsRemoteDataSource {
       String groupId, String chargeId, Map<String, dynamic> dto) async {
     final res = await _dio.post(
         ApiConstants.extraChargeBulkDiscount(groupId, chargeId), data: dto);
+    _throwIfError(res.data);
     return _message(res.data);
   }
 
@@ -99,6 +103,7 @@ class PaymentsRemoteDataSource {
     final res = await _dio.put(
         ApiConstants.extraChargePayment(groupId, chargeId, playerId),
         data: dto);
+    _throwIfError(res.data);
     return _message(res.data);
   }
 
@@ -133,6 +138,7 @@ class PaymentsRemoteDataSource {
   // POST /api/groups/{groupId}/payments/monthly/{year}/{month}/initiate
   Future<Map<String, dynamic>?> initiateMonth(String groupId, int year, int month) async {
     final res = await _dio.post(ApiConstants.initiateMonth(groupId, year, month));
+    _throwIfError(res.data);
     return _unwrapMap(res.data);
   }
 
@@ -155,7 +161,8 @@ class PaymentsRemoteDataSource {
   // Pay selected items (batch)
   // POST /api/groups/{groupId}/payments/pay-selected
   Future<void> paySelected(String groupId, Map<String, dynamic> dto) async {
-    await _dio.post(ApiConstants.paySelected(groupId), data: dto);
+    final res = await _dio.post(ApiConstants.paySelected(groupId), data: dto);
+    _throwIfError(res.data);
   }
 
   // Get payment summary for a specific player (admin/financeiro)
@@ -171,10 +178,11 @@ class PaymentsRemoteDataSource {
 
   /// Salva a avaliação (1–5 estrelas) de um jogador via PUT /api/Players/{id}.
   Future<void> updatePlayerRating(String playerId, int starRating) async {
-    await _dio.put(
+    final res = await _dio.put(
       ApiConstants.playerOps(playerId),
       data: {'guestStarRating': starRating},
     );
+    _throwIfError(res.data);
   }
 
   // ── Utilitário: converte arquivo para base64 ──────────────────────────────
@@ -185,6 +193,13 @@ class PaymentsRemoteDataSource {
     final b64   = base64Encode(bytes);
     final mime  = _guessMime(name);
     return (base64: b64, fileName: name, mimeType: mime);
+  }
+
+  void _throwIfError(dynamic data) {
+    if (data is Map) {
+      final msg = data['error'] as String?;
+      if (msg != null && msg.isNotEmpty) throw Exception(msg);
+    }
   }
 
   static String _guessMime(String name) {

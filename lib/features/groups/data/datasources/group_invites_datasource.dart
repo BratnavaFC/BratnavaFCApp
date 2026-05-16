@@ -31,10 +31,19 @@ class GroupInvitesDatasource {
   }
 
   Future<void> acceptInvite(String inviteId) async {
-    await _dio.patch(ApiConstants.groupInviteAccept(inviteId));
+    final res = await _dio.patch(ApiConstants.groupInviteAccept(inviteId));
+    _throwIfError(res.data);
   }
 
   Future<void> rejectInvite(String inviteId) async {
-    await _dio.patch(ApiConstants.groupInviteReject(inviteId));
+    final res = await _dio.patch(ApiConstants.groupInviteReject(inviteId));
+    _throwIfError(res.data);
+  }
+
+  void _throwIfError(dynamic data) {
+    if (data is Map) {
+      final msg = data['error'] as String?;
+      if (msg != null && msg.isNotEmpty) throw Exception(msg);
+    }
   }
 }

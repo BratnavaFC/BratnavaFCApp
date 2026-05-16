@@ -51,7 +51,8 @@ class GroupSettingsRemoteDataSource {
       mvpTieMaxPlayers:   mvpTieMaxPlayers,
       showPlayerStats:    showPlayerStats,
     );
-    await _dio.put(ApiConstants.groupSettings(groupId), data: body);
+    final res = await _dio.put(ApiConstants.groupSettings(groupId), data: body);
+    _throwIfError(res.data);
   }
 
   // ── Group Detail (name, admins, financeiros) ──────────────────────────────
@@ -65,26 +66,37 @@ class GroupSettingsRemoteDataSource {
   // ── Admins ────────────────────────────────────────────────────────────────
 
   Future<void> addAdmin(String groupId, String userId) async {
-    await _dio.post(ApiConstants.groupAdmins(groupId), data: {'userId': userId});
+    final res = await _dio.post(ApiConstants.groupAdmins(groupId), data: {'userId': userId});
+    _throwIfError(res.data);
   }
 
   Future<void> removeAdmin(String groupId, String userId) async {
-    await _dio.delete(ApiConstants.groupAdminById(groupId, userId));
+    final res = await _dio.delete(ApiConstants.groupAdminById(groupId, userId));
+    _throwIfError(res.data);
   }
 
   // ── Financeiros ───────────────────────────────────────────────────────────
 
   Future<void> addFinanceiro(String groupId, String userId) async {
-    await _dio.post(ApiConstants.groupFinanceiros(groupId), data: {'userId': userId});
+    final res = await _dio.post(ApiConstants.groupFinanceiros(groupId), data: {'userId': userId});
+    _throwIfError(res.data);
   }
 
   Future<void> removeFinanceiro(String groupId, String userId) async {
-    await _dio.delete(ApiConstants.groupFinanceiroById(groupId, userId));
+    final res = await _dio.delete(ApiConstants.groupFinanceiroById(groupId, userId));
+    _throwIfError(res.data);
   }
 
   // ── Group players (used for admin/financeiro candidate list) ─────────────
   // Reuses GET /api/Groups/{groupId} which already returns the players array.
   // Returns only linked (non-guest) members — candidates for admin/financeiro.
+
+  void _throwIfError(dynamic data) {
+    if (data is Map) {
+      final msg = data['error'] as String?;
+      if (msg != null && msg.isNotEmpty) throw Exception(msg);
+    }
+  }
 
   Future<List<GroupMember>> fetchGroupPlayers(String groupId) async {
     final res = await _dio.get(ApiConstants.groupById(groupId));

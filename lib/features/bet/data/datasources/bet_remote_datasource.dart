@@ -31,13 +31,15 @@ class BetRemoteDataSource {
 
   Future<void> placeOrUpdateBet(
       String groupId, String matchId, PlaceMatchBetDto dto) async {
-    await _dio.post(_bet(groupId, matchId), data: dto.toJson());
+    final res = await _dio.post(_bet(groupId, matchId), data: dto.toJson());
+    _throwIfError(res.data);
   }
 
   // ── Delete my bet ─────────────────────────────────────────────────────────
 
   Future<void> deleteBet(String groupId, String matchId) async {
-    await _dio.delete(_bet(groupId, matchId));
+    final res = await _dio.delete(_bet(groupId, matchId));
+    _throwIfError(res.data);
   }
 
   // ── Leaderboard ───────────────────────────────────────────────────────────
@@ -71,6 +73,13 @@ class BetRemoteDataSource {
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
+
+  void _throwIfError(dynamic data) {
+    if (data is Map) {
+      final msg = data['error'] as String?;
+      if (msg != null && msg.isNotEmpty) throw Exception(msg);
+    }
+  }
 
   Map<String, dynamic>? _unwrapMap(dynamic data) {
     if (data is Map<String, dynamic>) {

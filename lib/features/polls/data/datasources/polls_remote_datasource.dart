@@ -37,15 +37,18 @@ class PollsRemoteDataSource {
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   Future<void> closePoll(String groupId, String pollId, Map<String, dynamic> dto) async {
-    await _dio.post(ApiConstants.closePoll(groupId, pollId), data: dto);
+    final res = await _dio.post(ApiConstants.closePoll(groupId, pollId), data: dto);
+    _throwIfError(res.data);
   }
 
   Future<void> reopenPoll(String groupId, String pollId) async {
-    await _dio.put(ApiConstants.reopenPoll(groupId, pollId));
+    final res = await _dio.put(ApiConstants.reopenPoll(groupId, pollId));
+    _throwIfError(res.data);
   }
 
   Future<void> deletePoll(String groupId, String pollId) async {
-    await _dio.delete(ApiConstants.deletePoll(groupId, pollId));
+    final res = await _dio.delete(ApiConstants.deletePoll(groupId, pollId));
+    _throwIfError(res.data);
   }
 
   // ── Options ───────────────────────────────────────────────────────────────
@@ -75,7 +78,7 @@ class PollsRemoteDataSource {
     String? deadlineTime,
     bool clearDeadline = false,
   }) async {
-    await _dio.patch(
+    final res = await _dio.patch(
       ApiConstants.pollDeadline(groupId, pollId),
       data: {
         'deadlineDate':  deadlineDate,
@@ -83,12 +86,14 @@ class PollsRemoteDataSource {
         'clearDeadline': clearDeadline,
       },
     );
+    _throwIfError(res.data);
   }
 
   // ── Show-votes toggle ─────────────────────────────────────────────────────
 
   Future<void> toggleShowVotes(String groupId, String pollId, bool show) async {
-    await _dio.patch(ApiConstants.pollShowVotes(groupId, pollId), data: {'showVotes': show});
+    final res = await _dio.patch(ApiConstants.pollShowVotes(groupId, pollId), data: {'showVotes': show});
+    _throwIfError(res.data);
   }
 
   // ── Voting ────────────────────────────────────────────────────────────────
@@ -116,6 +121,13 @@ class PollsRemoteDataSource {
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
+
+  void _throwIfError(dynamic data) {
+    if (data is Map) {
+      final msg = data['error'] as String?;
+      if (msg != null && msg.isNotEmpty) throw Exception(msg);
+    }
+  }
 
   List<dynamic> _unwrapList(dynamic data) {
     if (data is List) return data;

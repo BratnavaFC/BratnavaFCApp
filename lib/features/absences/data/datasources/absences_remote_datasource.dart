@@ -18,17 +18,27 @@ class AbsencesRemoteDataSource {
 
   Future<AbsenceDto> create(CreateAbsenceDto dto) async {
     final res = await _dio.post(ApiConstants.absences, data: dto.toJson());
+    _throwIfError(res.data);
     return AbsenceDto.fromJson(
         (res.data as Map<String, dynamic>)['data'] as Map<String, dynamic>);
   }
 
   Future<AbsenceDto> update(String id, CreateAbsenceDto dto) async {
     final res = await _dio.put(ApiConstants.absenceById(id), data: dto.toJson());
+    _throwIfError(res.data);
     return AbsenceDto.fromJson(
         (res.data as Map<String, dynamic>)['data'] as Map<String, dynamic>);
   }
 
   Future<void> delete(String id) async {
-    await _dio.delete(ApiConstants.absenceById(id));
+    final res = await _dio.delete(ApiConstants.absenceById(id));
+    _throwIfError(res.data);
+  }
+
+  void _throwIfError(dynamic data) {
+    if (data is Map) {
+      final msg = data['error'] as String?;
+      if (msg != null && msg.isNotEmpty) throw Exception(msg);
+    }
   }
 }

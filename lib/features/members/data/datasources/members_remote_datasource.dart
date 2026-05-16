@@ -56,13 +56,14 @@ class MembersRemoteDataSource {
     required String currentPassword,
     required String newPassword,
   }) async {
-    await _dio.put(
+    final res = await _dio.put(
       ApiConstants.changePassword(id),
       data: {
         'currentPassword': currentPassword,
         'newPassword':     newPassword,
       },
     );
+    _throwIfError(res.data);
   }
 
   Future<AppUser> toggleUserActive(String id, {required bool activate}) async {
@@ -132,10 +133,18 @@ class MembersRemoteDataSource {
   }
 
   Future<void> deletePlayer(String id) async {
-    await _dio.delete(ApiConstants.playerOps(id));
+    final res = await _dio.delete(ApiConstants.playerOps(id));
+    _throwIfError(res.data);
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
+
+  void _throwIfError(dynamic data) {
+    if (data is Map) {
+      final msg = data['error'] as String?;
+      if (msg != null && msg.isNotEmpty) throw Exception(msg);
+    }
+  }
 
   List<dynamic> _unwrapList(dynamic data) {
     if (data is List) return data;

@@ -22,9 +22,12 @@ class AppTopBar extends ConsumerWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final accountState = ref.watch(accountStoreProvider);
-    final active       = accountState.activeAccount;
-    final players      = ref.watch(myPlayersProvider).valueOrNull ?? [];
-    final activePlayer = ref.watch(activePlayerProvider);
+    final active        = accountState.activeAccount;
+    final playersAsync  = ref.watch(myPlayersProvider);
+    // Durante re-fetch (isRefreshing) valueOrNull expõe dados da conta anterior.
+    // Usar lista vazia enquanto carrega para não passar patotas obsoletas ao menu.
+    final players       = playersAsync.isLoading ? <MyPlayer>[] : (playersAsync.valueOrNull ?? []);
+    final activePlayer  = ref.watch(activePlayerProvider);
 
     // Bootstrap: igual ao site — quando players carregam e o account não tem
     // activePlayerId/activeGroupId, persiste o primeiro player automaticamente.
@@ -571,7 +574,6 @@ class _UserMenuButton extends ConsumerWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (_) => _UserMenuSheet(
-        active:       active,
         accounts:     accounts,
         activeId:     activeId,
         players:      players,
@@ -582,6 +584,11 @@ class _UserMenuButton extends ConsumerWidget {
           // Ativa a conta destino limpando activeGroupId/activePlayerId dela,
           // evitando dados contaminados de trocas anteriores.
           ref.read(accountStoreProvider.notifier).switchTo(userId);
+          // Reseta o guard de 401 para que o interceptor não trate a nova
+          // conta como se já estivesse em processo de logout.
+          ref.read(authInterceptorProvider).resetUnauthorizedGuard();
+          // Força re-fetch imediato dos jogadores da nova conta.
+          ref.invalidate(myPlayersProvider);
           // Invalida caches de notificações/convites (sempre assistidos, nunca
           // se auto-dispõem).
           ref.invalidate(notifUnreadCountProvider);
@@ -619,7 +626,6 @@ class _UserMenuButton extends ConsumerWidget {
 // ── Bottom Sheet ──────────────────────────────────────────────────────────────
 
 class _UserMenuSheet extends StatelessWidget {
-  final Account?       active;
   final List<Account>  accounts;
   final String?        activeId;
   final List<MyPlayer> players;
@@ -630,7 +636,6 @@ class _UserMenuSheet extends StatelessWidget {
   final VoidCallback           onLogout;
 
   const _UserMenuSheet({
-    required this.active,
     required this.accounts,
     required this.activeId,
     required this.players,

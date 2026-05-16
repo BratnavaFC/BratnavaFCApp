@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/errors/app_exception.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../data/datasources/absences_remote_datasource.dart';
 import '../../domain/entities/absence.dart';
@@ -104,10 +105,10 @@ class _AbsencesPageState extends ConsumerState<AbsencesPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Ausência removida.')));
       }
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Erro ao remover ausência.')));
+          SnackBar(content: Text(extractDioError(e, 'Erro ao remover ausência.'))));
       }
     }
   }

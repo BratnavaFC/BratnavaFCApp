@@ -1,9 +1,10 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../replays/domain/entities/replay_clip.dart';
 import '../../../replays/presentation/pages/replay_video_player_page.dart';
+import '../../../../core/errors/app_exception.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/presentation/widgets/group_icon_renderer.dart';
 import '../../../auth/presentation/providers/account_store.dart';
@@ -28,8 +29,6 @@ class MatchDetailsPage extends ConsumerStatefulWidget {
 class _MatchDetailsPageState extends ConsumerState<MatchDetailsPage> {
   // 0 = Todos, 1 = Time A, 2 = Time B
   int _goalsTab  = 0;
-  // 0 = Jogadores, 1 = Avaliações
-  int _mainTab   = 0;
   List<ReplayClip> _replays = [];
   bool _sharingCard = false;
 
@@ -67,10 +66,10 @@ class _MatchDetailsPageState extends ConsumerState<MatchDetailsPage> {
           ),
         );
       }
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Não foi possível gerar o card')),
+          SnackBar(content: Text(extractDioError(e, 'Não foi possível gerar o card'))),
         );
       }
     } finally {
@@ -124,14 +123,12 @@ class _MatchDetailsPageState extends ConsumerState<MatchDetailsPage> {
         isDark:        isDark,
         isAdmin:       isAdmin,
         goalsTab:      _goalsTab,
-        mainTab:       _mainTab,
         icons:         icons,
         replays:       _replays,
         groupId:       widget.groupId,
         accessToken:   accessToken,
         sharingCard:   _sharingCard,
         onGoalsTab:    (t) => setState(() => _goalsTab = t),
-        onMainTab:     (t) => setState(() => _mainTab  = t),
         onBack:        () => context.go('/app/history'),
         onShare:       _shareMatchCard,
       ),
@@ -146,9 +143,7 @@ class _DetailsBody extends StatelessWidget {
   final bool         isDark;
   final bool         isAdmin;
   final int          goalsTab;
-  final int          mainTab;
   final void Function(int) onGoalsTab;
-  final void Function(int) onMainTab;
   final VoidCallback onBack;
   final GroupIcons   icons;
   final List<ReplayClip> replays;
@@ -162,9 +157,7 @@ class _DetailsBody extends StatelessWidget {
     required this.isDark,
     required this.isAdmin,
     required this.goalsTab,
-    required this.mainTab,
     required this.onGoalsTab,
-    required this.onMainTab,
     required this.onBack,
     required this.icons,
     required this.replays,
@@ -303,42 +296,17 @@ class _DetailsBody extends StatelessWidget {
 
               const SizedBox(height: 12),
 
-              // ── Tabs: Jogadores | Avaliações ─────────────────────────
-              _MainTabBar(
-                activeTab: mainTab,
-                onTab:     onMainTab,
-                isDark:    isDark,
+              // ── Jogadores ─────────────────────────────────────────
+              _TeamCards(
+                teamAPlayers: data.teamAPlayers,
+                teamBPlayers: data.teamBPlayers,
+                aColor: aColor,
+                bColor: bColor,
+                aName:  aName,
+                bName:  bName,
+                isDark: isDark,
+                icons:  icons,
               ),
-              const SizedBox(height: 12),
-
-              // Tab content
-              if (mainTab == 0) ...[
-                // Jogadores tab — lineup
-                _TeamCards(
-                  teamAPlayers: data.teamAPlayers,
-                  teamBPlayers: data.teamBPlayers,
-                  aColor: aColor,
-                  bColor: bColor,
-                  aName:  aName,
-                  bName:  bName,
-                  isDark: isDark,
-                  icons:  icons,
-                ),
-              ] else ...[
-                // Avaliações tab — MVP votes
-                if (data.computedMvp?.playerName != null)
-                  _MvpSection(
-                    mvp:        data.computedMvp!,
-                    voteCounts: data.voteCounts,
-                    aName:      aName,
-                    bName:      bName,
-                    isAdmin:    isAdmin,
-                    isDark:     isDark,
-                    icons:      icons,
-                  )
-                else
-                  _NoRatings(isDark: isDark),
-              ],
 
               // Replays section (only when replays exist)
               if (replays.isNotEmpty) ...[
@@ -1154,211 +1122,6 @@ class _ColorSwatch extends StatelessWidget {
   }
 }
 
-// ── MVP section ───────────────────────────────────────────────────────────────
-
-class _MvpSection extends StatelessWidget {
-  final MvpInfo              mvp;
-  final List<MvpVoteResult>  voteCounts;
-  final String               aName;
-  final String               bName;
-  final bool                 isAdmin;
-  final bool                 isDark;
-  final GroupIcons           icons;
-
-  const _MvpSection({
-    required this.mvp,
-    required this.voteCounts,
-    required this.aName,
-    required this.bName,
-    required this.isAdmin,
-    required this.isDark,
-    required this.icons,
-  });
-
-  String get _teamName {
-    if (mvp.team == 1) return aName;
-    if (mvp.team == 2) return bName;
-    return '';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    const gold       = Color(0xFFd97706);
-    const goldLight  = Color(0xFFFEF3C7);
-    const goldBorder = Color(0xFFFDE68A);
-
-    final maxVotes = voteCounts.isEmpty
-        ? 1
-        : voteCounts.map((r) => r.votes).reduce((a, b) => a > b ? a : b);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // ── Winner card (user only) ──────────────────────────────
-          if (!isAdmin) Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color:        isDark ? const Color(0xFF1c1208) : goldLight,
-              borderRadius: BorderRadius.circular(12),
-              border:       Border.all(
-                color: isDark ? gold.withAlpha(80) : goldBorder,
-              ),
-            ),
-            child: Row(
-              children: [
-                // Trophy icon
-                Container(
-                  width: 42, height: 42,
-                  decoration: BoxDecoration(
-                    color:  gold.withAlpha(isDark ? 40 : 30),
-                    shape:  BoxShape.circle,
-                  ),
-                  child: Center(
-                    child: renderGroupIcon(icons.mvp, size: 20, color: gold),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'MELHOR DO JOGO',
-                      style: TextStyle(
-                        fontSize:   10,
-                        fontWeight: FontWeight.w700,
-                        color:      Color(0xFFd97706),
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      mvp.playerName!,
-                      style: TextStyle(
-                        fontSize:   16,
-                        fontWeight: FontWeight.w800,
-                        color:      isDark ? Colors.white : const Color(0xFF0f172a),
-                      ),
-                    ),
-                    if (_teamName.isNotEmpty)
-                      Text(
-                        _teamName,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color:    gold,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          // ── Vote breakdown (admin only) ─────────────────────────
-          if (isAdmin) ...[
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color:        isDark ? AppColors.slate800 : Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border:       Border.all(
-                  color: isDark ? AppColors.slate700 : AppColors.slate200,
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'APURAÇÃO DE VOTOS',
-                    style: TextStyle(
-                      fontSize:   10,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.8,
-                      color: isDark ? AppColors.slate400 : AppColors.slate500,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  if (voteCounts.isEmpty)
-                    Text(
-                      'Sem dados de votação',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: isDark ? AppColors.slate500 : AppColors.slate400,
-                      ),
-                    ),
-                  ...voteCounts.map((r) {
-                    final isWinner  = r.playerName == mvp.playerName;
-                    final barFrac   = maxVotes > 0 ? r.votes / maxVotes : 0.0;
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(
-                        children: [
-                          if (isWinner)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 4),
-                              child: renderGroupIcon(icons.mvp, size: 12, color: gold),
-                            )
-                          else
-                            const SizedBox(width: 20),
-                          SizedBox(
-                            width: 100,
-                            child: Text(
-                              r.playerName,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize:   13,
-                                fontWeight: isWinner
-                                    ? FontWeight.w600
-                                    : FontWeight.w400,
-                                color: isDark
-                                    ? AppColors.slate200
-                                    : AppColors.slate700,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: LinearProgressIndicator(
-                                value:            barFrac,
-                                minHeight:        8,
-                                backgroundColor:  isDark
-                                    ? AppColors.slate700
-                                    : AppColors.slate200,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  isWinner ? gold : AppColors.slate400,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '${r.votes}',
-                            style: TextStyle(
-                              fontSize:   13,
-                              fontWeight: FontWeight.w600,
-                              color: isDark
-                                  ? AppColors.slate300
-                                  : AppColors.slate600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
 
 // ── Replays section ───────────────────────────────────────────────────────────
 
@@ -1570,168 +1333,6 @@ class _ReplayChip extends StatelessWidget {
   }
 }
 
-
-// ── Main tab bar (Jogadores | Avaliações) ────────────────────────────────────
-
-class _MainTabBar extends StatelessWidget {
-  final int          activeTab;
-  final void Function(int) onTab;
-  final bool         isDark;
-
-  const _MainTabBar({
-    required this.activeTab,
-    required this.onTab,
-    required this.isDark,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Container(
-        padding: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          color:        isDark ? AppColors.slate800 : AppColors.slate100,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: _MainTab(
-                label:  'Jogadores',
-                icon:   Icons.groups_rounded,
-                active: activeTab == 0,
-                isDark: isDark,
-                onTap:  () => onTab(0),
-              ),
-            ),
-            Expanded(
-              child: _MainTab(
-                label:  'Avaliações',
-                icon:   Icons.star_rounded,
-                active: activeTab == 1,
-                isDark: isDark,
-                onTap:  () => onTab(1),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _MainTab extends StatelessWidget {
-  final String   label;
-  final IconData icon;
-  final bool     active;
-  final bool     isDark;
-  final VoidCallback onTap;
-
-  const _MainTab({
-    required this.label,
-    required this.icon,
-    required this.active,
-    required this.isDark,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(vertical: 9),
-        decoration: BoxDecoration(
-          color: active
-              ? (isDark ? AppColors.slate700 : Colors.white)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-          boxShadow: active
-              ? [BoxShadow(
-                  color:      Colors.black.withAlpha(isDark ? 60 : 25),
-                  blurRadius: 4,
-                  offset:     const Offset(0, 1),
-                )]
-              : null,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size:  15,
-              color: active
-                  ? (isDark ? Colors.white : AppColors.slate900)
-                  : (isDark ? AppColors.slate500 : AppColors.slate400),
-            ),
-            const SizedBox(width: 5),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize:   13,
-                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                color: active
-                    ? (isDark ? Colors.white : AppColors.slate900)
-                    : (isDark ? AppColors.slate500 : AppColors.slate400),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _NoRatings extends StatelessWidget {
-  final bool isDark;
-  const _NoRatings({required this.isDark});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 40),
-        decoration: BoxDecoration(
-          color:        isDark ? AppColors.slate900 : Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isDark ? AppColors.slate700 : AppColors.slate200,
-          ),
-        ),
-        child: Column(
-          children: [
-            Icon(
-              Icons.star_border_rounded,
-              size:  36,
-              color: isDark ? AppColors.slate600 : AppColors.slate300,
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'Sem avaliações',
-              style: TextStyle(
-                fontSize:   14,
-                fontWeight: FontWeight.w500,
-                color: isDark ? AppColors.slate400 : AppColors.slate500,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'As avaliações aparecem após a votação do MVP.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12,
-                color: isDark ? AppColors.slate600 : AppColors.slate400,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 // ── Loading skeleton ──────────────────────────────────────────────────────────
 

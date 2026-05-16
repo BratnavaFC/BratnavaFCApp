@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../auth/presentation/providers/account_store.dart';
 import '../../../dashboard/presentation/providers/dashboard_provider.dart';
 import '../../domain/entities/replay_clip.dart';
+import '../../../../core/errors/app_exception.dart';
 import '../../../../core/utils/date_utils.dart';
 import '../providers/replays_provider.dart';
 import 'replay_video_player_page.dart';
@@ -102,7 +103,7 @@ class _ReplayVaultPageState extends ConsumerState<ReplayVaultPage>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao excluir: $e')),
+          SnackBar(content: Text(extractDioError(e, 'Erro ao excluir replay.'))),
         );
       }
     }
@@ -227,15 +228,15 @@ class _ReplayVaultPageState extends ConsumerState<ReplayVaultPage>
                       onLike: () async {
                         try {
                           await notifier.toggleLike(clip.clipId);
-                        } catch (_) {
-                          _showError('Erro ao curtir replay.');
+                        } catch (e) {
+                          _showError(extractDioError(e, 'Erro ao curtir replay.'));
                         }
                       },
                       onFavorite: () async {
                         try {
                           await notifier.toggleFavorite(clip.clipId);
-                        } catch (_) {
-                          _showError('Erro ao favoritar replay.');
+                        } catch (e) {
+                          _showError(extractDioError(e, 'Erro ao favoritar replay.'));
                         }
                       },
                       onDelete: isAdmin

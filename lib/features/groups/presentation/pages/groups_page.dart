@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/api/api_constants.dart';
+import '../../../../core/errors/app_exception.dart';
 import '../../../auth/presentation/providers/account_store.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../dashboard/presentation/providers/dashboard_provider.dart';
@@ -403,9 +404,9 @@ class _GroupsPageState extends ConsumerState<GroupsPage> {
       setState(() => _group = _GroupDto.fromJson(raw as Map<String, dynamic>));
       // Load payment badges in parallel (silently)
       _loadPaymentData(groupId);
-    } catch (_) {
+    } catch (e) {
       setState(() {
-        _groupError = 'Não foi possível carregar os dados da patota.';
+        _groupError = extractDioError(e, 'Não foi possível carregar os dados da patota.');
       });
     } finally {
       if (mounted) setState(() => _groupLoading = false);

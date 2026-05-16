@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/errors/app_exception.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../auth/domain/entities/account.dart';
 import '../../../auth/presentation/providers/account_store.dart';
@@ -1941,8 +1942,8 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
     try {
       final players = await widget.ds.fetchGroupPlayers(widget.groupId);
       if (mounted) setState(() { _allPlayers = players; _loading = false; });
-    } catch (_) {
-      if (mounted) setState(() { _loading = false; _searchErr = 'Erro ao carregar membros.'; });
+    } catch (e) {
+      if (mounted) setState(() { _loading = false; _searchErr = extractDioError(e, 'Erro ao carregar membros.'); });
     }
   }
 

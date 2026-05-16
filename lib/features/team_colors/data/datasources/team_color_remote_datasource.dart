@@ -35,11 +35,21 @@ class TeamColorRemoteDataSource {
   }
 
   Future<void> activateColor(String groupId, String colorId) async {
-    await _dio.post(ApiConstants.teamColorActivate(groupId, colorId));
+    final res = await _dio.post(ApiConstants.teamColorActivate(groupId, colorId));
+    _throwIfError(res.data);
   }
 
   Future<void> deactivateColor(String groupId, String colorId) async {
-    await _dio.post(ApiConstants.teamColorDeactivate(groupId, colorId));
+    final res = await _dio.post(ApiConstants.teamColorDeactivate(groupId, colorId));
+    _throwIfError(res.data);
+  }
+
+  /// Lança exceção quando o servidor retorna HTTP 200 com corpo de erro.
+  void _throwIfError(dynamic data) {
+    if (data is Map) {
+      final msg = (data['error'] ?? data['message']) as String?;
+      if (msg != null && msg.isNotEmpty) throw Exception(msg);
+    }
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────

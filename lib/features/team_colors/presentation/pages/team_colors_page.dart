@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/errors/app_exception.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../auth/presentation/providers/account_store.dart';
 import '../../../dashboard/presentation/providers/dashboard_provider.dart';
@@ -94,8 +95,11 @@ class _TeamColorsPageState extends ConsumerState<TeamColorsPage> {
                     ref.invalidate(teamColorsProvider(groupId));
                   } catch (e) {
                     if (context.mounted) {
+                      final msg = e is Exception
+                          ? e.toString().replaceFirst('Exception: ', '')
+                          : extractDioError(e);
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Erro: $e')),
+                        SnackBar(content: Text(msg)),
                       );
                     }
                   }
@@ -508,18 +512,32 @@ class _ColorCarouselState extends State<_ColorCarousel> {
   @override
   void initState() {
     super.initState();
+    final n = widget.items.length;
     _ctrl = PageController(
       viewportFraction: 0.75,
-      initialPage: _midOffset + widget.selectedIndex,
+      initialPage: n <= 1 ? 0 : _midOffset + widget.selectedIndex,
     );
   }
 
   @override
   void didUpdateWidget(_ColorCarousel old) {
     super.didUpdateWidget(old);
+    final n = widget.items.length;
+
+    // Quando o número de itens muda (ex: 1→2), o controller precisa ser
+    // recriado no mid-offset correto; caso contrário a navegação para a
+    // esquerda ficaria presa em page=0 (limite inferior do PageView).
+    if (old.items.length != n) {
+      _ctrl.dispose();
+      _ctrl = PageController(
+        viewportFraction: 0.75,
+        initialPage: n <= 1 ? 0 : _midOffset + widget.selectedIndex,
+      );
+      return;
+    }
+
     if (old.selectedIndex != widget.selectedIndex && _ctrl.hasClients) {
       final currentVirtual = _ctrl.page?.round() ?? _midOffset;
-      final n = widget.items.length;
       final currentReal = currentVirtual % n;
       if (currentReal != widget.selectedIndex) {
         // External selection change — jump to the nearest virtual page.
@@ -578,7 +596,8 @@ class _ColorCarouselState extends State<_ColorCarousel> {
                   return PageView.builder(
                     controller:   _ctrl,
                     clipBehavior: Clip.none,
-                    itemCount:    n * _kMult,
+                    physics: n <= 1 ? const NeverScrollableScrollPhysics() : null,
+                    itemCount:    n <= 1 ? 1 : n * _kMult,
                     onPageChanged: (virtualIndex) =>
                         widget.onIndexChanged(virtualIndex % n),
                     itemBuilder: (context, virtualIndex) {
@@ -588,7 +607,7 @@ class _ColorCarouselState extends State<_ColorCarousel> {
 
                       double scale = 0.88;
                       if (_ctrl.hasClients && _ctrl.position.haveDimensions) {
-                        final page  = _ctrl.page ?? (_midOffset + widget.selectedIndex).toDouble();
+                        final page  = _ctrl.page ?? (n <= 1 ? 0 : _midOffset + widget.selectedIndex).toDouble();
                         final delta = (page - virtualIndex).abs().clamp(0.0, 1.0);
                         scale = 1.0 - delta * 0.12;
                       } else {
@@ -621,31 +640,33 @@ class _ColorCarouselState extends State<_ColorCarousel> {
                 },
               ),
 
-              // Left arrow — always enabled (circular)
-              Positioned(
-                left: 0, top: 0, bottom: 0,
-                child: Center(
-                  child: _NavArrow(
-                    icon:    Icons.chevron_left_rounded,
-                    enabled: true,
-                    isDark:  widget.isDark,
-                    onTap:   _goLeft,
+              if (n > 1) ...[
+                // Left arrow
+                Positioned(
+                  left: 0, top: 0, bottom: 0,
+                  child: Center(
+                    child: _NavArrow(
+                      icon:    Icons.chevron_left_rounded,
+                      enabled: true,
+                      isDark:  widget.isDark,
+                      onTap:   _goLeft,
+                    ),
                   ),
                 ),
-              ),
 
-              // Right arrow — always enabled (circular)
-              Positioned(
-                right: 0, top: 0, bottom: 0,
-                child: Center(
-                  child: _NavArrow(
-                    icon:    Icons.chevron_right_rounded,
-                    enabled: true,
-                    isDark:  widget.isDark,
-                    onTap:   _goRight,
+                // Right arrow
+                Positioned(
+                  right: 0, top: 0, bottom: 0,
+                  child: Center(
+                    child: _NavArrow(
+                      icon:    Icons.chevron_right_rounded,
+                      enabled: true,
+                      isDark:  widget.isDark,
+                      onTap:   _goRight,
+                    ),
                   ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
@@ -1386,7 +1407,7 @@ class _EditSheetState extends State<_EditSheet> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao salvar: $e')),
+          SnackBar(content: Text(extractDioError(e))),
         );
         setState(() => _saving = false);
       }

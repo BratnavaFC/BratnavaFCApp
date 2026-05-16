@@ -21,6 +21,13 @@ class MatchRemoteDataSource {
     return d is Map<String, dynamic> ? d : null;
   }
 
+  void _throwIfError(dynamic data) {
+    if (data is Map) {
+      final msg = (data['error'] ?? data['message']) as String?;
+      if (msg != null && msg.isNotEmpty) throw Exception(msg);
+    }
+  }
+
   // ── Cores e configurações ─────────────────────────────────────────────────
 
   Future<List<TeamColorInfo>> fetchTeamColors(String groupId) async {
@@ -189,10 +196,11 @@ class MatchRemoteDataSource {
   Future<void> setColors(
     String groupId, String matchId, String teamAColorId, String teamBColorId,
   ) async {
-    await _dio.patch(ApiConstants.matchColors(groupId, matchId), data: {
+    final res = await _dio.patch(ApiConstants.matchColors(groupId, matchId), data: {
       'teamAColorId': teamAColorId,
       'teamBColorId': teamBColorId,
     });
+    _throwIfError(res.data);
   }
 
   Future<void> swapPlayers(
@@ -254,6 +262,12 @@ class MatchRemoteDataSource {
 
   Future<void> removeGoal(String groupId, String matchId, String goalId) async {
     await _dio.delete(ApiConstants.matchGoalById(groupId, matchId, goalId));
+  }
+
+  Future<void> updateGoal(
+    String groupId, String matchId, String goalId, Map<String, dynamic> data,
+  ) async {
+    await _dio.put(ApiConstants.matchGoalById(groupId, matchId, goalId), data: data);
   }
 
   Future<void> setScore(

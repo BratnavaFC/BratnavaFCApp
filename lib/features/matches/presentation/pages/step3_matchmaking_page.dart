@@ -59,7 +59,10 @@ class _Step3State extends ConsumerState<Step3MatchmakingPage> {
     if (_selectedTeamAColorId == null || _selectedTeamBColorId == null) return;
     await ref.read(matchNotifierProvider.notifier)
         .setColors(_selectedTeamAColorId!, _selectedTeamBColorId!);
-    setState(() => _editingColors = false);
+    // Only close editor on success; error path is handled by ref.listen
+    if (ref.read(matchNotifierProvider).error == null) {
+      setState(() => _editingColors = false);
+    }
   }
 
   Future<void> _generateTeams() async {
@@ -78,6 +81,7 @@ class _Step3State extends ConsumerState<Step3MatchmakingPage> {
   @override
   Widget build(BuildContext context) {
     // Sincroniza cores locais sempre que o provider atualizar teamAColor/teamBColor
+    // e exibe erros via snackbar.
     ref.listen<MatchState>(matchNotifierProvider, (prev, next) {
       final aChanged = prev?.teamAColor?.id != next.teamAColor?.id;
       final bChanged = prev?.teamBColor?.id != next.teamBColor?.id;
@@ -87,6 +91,12 @@ class _Step3State extends ConsumerState<Step3MatchmakingPage> {
           if (next.teamBColor != null) _selectedTeamBColorId = next.teamBColor!.id;
           _editingColors = false; // fecha o painel após aplicar
         });
+      }
+      if (next.error != null && next.error != prev?.error) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(next.error!)),
+        );
+        ref.read(matchNotifierProvider.notifier).clearError();
       }
     });
 
@@ -294,6 +304,23 @@ class _Step3State extends ConsumerState<Step3MatchmakingPage> {
                 isDark:  isDark,
               ),
               const SizedBox(height: 12),
+              if (_isAdmin) ...[
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: FilledButton.icon(
+                    onPressed: s.mutating ? null : _startMatch,
+                    icon: s.mutating
+                        ? const SizedBox(width: 18, height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Icon(Icons.sports_soccer_rounded, size: 18),
+                    label: s.mutating
+                        ? const SizedBox.shrink()
+                        : const Text('Iniciar partida', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
             ],
 
             // ── Placeholder (nem times nem opções) ──────────────────────────
@@ -323,7 +350,7 @@ final _nullColor = TeamColorInfo(id: '', name: '—', hexValue: '#cbd5e1');
 
 // ── Opções geradas + carrossel ────────────────────────────────────────────────
 
-class _TeamGenOptionsSection extends StatefulWidget {
+class _TeamGenOptionsSection extends ConsumerStatefulWidget {
   final List<TeamGenOption> options;
   final int selectedIdx;
   final TeamColorInfo? teamAColor;
@@ -349,11 +376,59 @@ class _TeamGenOptionsSection extends StatefulWidget {
   });
 
   @override
-  State<_TeamGenOptionsSection> createState() => _TeamGenOptionsSectionState();
+  ConsumerState<_TeamGenOptionsSection> createState() => _TeamGenOptionsSectionState();
 }
 
-class _TeamGenOptionsSectionState extends State<_TeamGenOptionsSection> {
-  bool _showExplanation = false;
+class _TeamGenOptionsSectionState extends ConsumerState<_TeamGenOptionsSection> {
+  bool    _showExplanation = false;
+  String? _selectedA;
+  String? _selectedB;
+
+  @override
+  void didUpdateWidget(_TeamGenOptionsSection old) {
+    super.didUpdateWidget(old);
+    if (old.selectedIdx != widget.selectedIdx) {
+      _selectedA = null;
+      _selectedB = null;
+    }
+  }
+
+  void _moveToB() {
+    if (_selectedA == null) return;
+    final opt = widget.options[widget.selectedIdx.clamp(0, widget.options.length - 1)];
+    final player = opt.teamA.firstWhere((p) => p.playerId == _selectedA);
+    ref.read(matchNotifierProvider.notifier).editTeamGenOption(
+      widget.selectedIdx,
+      opt.teamA.where((p) => p.playerId != _selectedA).toList(),
+      [...opt.teamB, player],
+    );
+    setState(() { _selectedA = null; _selectedB = null; });
+  }
+
+  void _moveToA() {
+    if (_selectedB == null) return;
+    final opt = widget.options[widget.selectedIdx.clamp(0, widget.options.length - 1)];
+    final player = opt.teamB.firstWhere((p) => p.playerId == _selectedB);
+    ref.read(matchNotifierProvider.notifier).editTeamGenOption(
+      widget.selectedIdx,
+      [...opt.teamA, player],
+      opt.teamB.where((p) => p.playerId != _selectedB).toList(),
+    );
+    setState(() { _selectedA = null; _selectedB = null; });
+  }
+
+  void _swap() {
+    if (_selectedA == null || _selectedB == null) return;
+    final opt = widget.options[widget.selectedIdx.clamp(0, widget.options.length - 1)];
+    final pA = opt.teamA.firstWhere((p) => p.playerId == _selectedA);
+    final pB = opt.teamB.firstWhere((p) => p.playerId == _selectedB);
+    ref.read(matchNotifierProvider.notifier).editTeamGenOption(
+      widget.selectedIdx,
+      opt.teamA.map((p) => p.playerId == _selectedA ? pB : p).toList(),
+      opt.teamB.map((p) => p.playerId == _selectedB ? pA : p).toList(),
+    );
+    setState(() { _selectedA = null; _selectedB = null; });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -474,65 +549,116 @@ class _TeamGenOptionsSectionState extends State<_TeamGenOptionsSection> {
 
           const SizedBox(height: 14),
 
-          // ── Botões Time A << >> Time B ────────────────────────────────────
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: aColor,
-                    side: BorderSide(color: aColor.withValues(alpha: 0.5)),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                  ),
-                  onPressed: widget.selectedIdx > 0
-                      ? () => widget.onSelectIdx(widget.selectedIdx - 1)
-                      : null,
-                  icon: const Icon(Icons.chevron_left, size: 16),
-                  label: Text('<< $aName', style: const TextStyle(fontSize: 12)),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                child: Icon(Icons.swap_horiz, size: 18, color: AppColors.slate400),
-              ),
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: bColor,
-                    side: BorderSide(color: bColor.withValues(alpha: 0.5)),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                  ),
-                  onPressed: widget.selectedIdx < total - 1
-                      ? () => widget.onSelectIdx(widget.selectedIdx + 1)
-                      : null,
-                  icon: Text('$bName >>', style: const TextStyle(fontSize: 12)),
-                  label: const Icon(Icons.chevron_right, size: 16),
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 12),
-
-          // ── Listas de jogadores ───────────────────────────────────────────
+          // ── Listas de jogadores com seleção ───────────────────────────────
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(child: _TeamPlayerList(
-                teamName: aName,
-                color:    aColor,
-                players:  opt.teamA,
-                isDark:   widget.isDark,
+                teamName:        aName,
+                color:           aColor,
+                players:         opt.teamA,
+                isDark:          widget.isDark,
+                selectedPlayerId: _selectedA,
+                onPlayerTap: widget.isAdmin ? (pid) => setState(() {
+                  _selectedA = _selectedA == pid ? null : pid;
+                }) : null,
               )),
               const SizedBox(width: 8),
               Expanded(child: _TeamPlayerList(
-                teamName: bName,
-                color:    bColor,
-                players:  opt.teamB,
-                isDark:   widget.isDark,
+                teamName:        bName,
+                color:           bColor,
+                players:         opt.teamB,
+                isDark:          widget.isDark,
+                selectedPlayerId: _selectedB,
+                onPlayerTap: widget.isAdmin ? (pid) => setState(() {
+                  _selectedB = _selectedB == pid ? null : pid;
+                }) : null,
               )),
             ],
           ),
+
+          if (widget.isAdmin) ...[
+            const SizedBox(height: 10),
+
+            // ── Botões mover / trocar ─────────────────────────────────────
+            Builder(builder: (context) {
+              final canMoveToA = _selectedB != null && _selectedA == null;
+              final canMoveToB = _selectedA != null && _selectedB == null;
+              final canSwap    = _selectedA != null && _selectedB != null;
+              return Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: aColor,
+                        side: BorderSide(
+                          color: canMoveToA ? aColor : aColor.withValues(alpha: 0.25),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                      ),
+                      onPressed: canMoveToA ? _moveToA : null,
+                      icon: const Icon(Icons.chevron_left, size: 16),
+                      label: Text('<< $aName', style: const TextStyle(fontSize: 12)),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    child: canSwap
+                        ? IconButton(
+                            onPressed: _swap,
+                            icon: Icon(Icons.swap_horiz, size: 22,
+                                color: Theme.of(context).colorScheme.primary),
+                            style: IconButton.styleFrom(
+                              minimumSize: const Size(36, 36),
+                              padding: EdgeInsets.zero,
+                            ),
+                          )
+                        : const Icon(Icons.swap_horiz, size: 18, color: AppColors.slate300),
+                  ),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: bColor,
+                        side: BorderSide(
+                          color: canMoveToB ? bColor : bColor.withValues(alpha: 0.25),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                      ),
+                      onPressed: canMoveToB ? _moveToB : null,
+                      icon: Text('$bName >>', style: const TextStyle(fontSize: 12)),
+                      label: const Icon(Icons.chevron_right, size: 16),
+                    ),
+                  ),
+                ],
+              );
+            }),
+
+            // ── Hint ──────────────────────────────────────────────────────
+            const SizedBox(height: 6),
+            Builder(builder: (context) {
+              final canSwap = _selectedA != null && _selectedB != null;
+              String hint;
+              if (canSwap) {
+                hint = 'Toque ⇄ para trocar os jogadores selecionados';
+              } else if (_selectedA != null) {
+                hint = 'Toque em "$bName >>" para mover para o $bName';
+              } else if (_selectedB != null) {
+                hint = 'Toque em "<< $aName" para mover para o $aName';
+              } else {
+                hint = 'Toque em um jogador para movê-lo de time';
+              }
+              return Text(
+                hint,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: (_selectedA != null || _selectedB != null)
+                      ? Colors.amber.shade700
+                      : AppColors.slate400,
+                ),
+                textAlign: TextAlign.center,
+              );
+            }),
+          ],
 
           if (widget.isAdmin) ...[
             const SizedBox(height: 14),
@@ -679,10 +805,13 @@ class _TeamPlayerList extends StatelessWidget {
   final Color  color;
   final List<TeamGenPlayer> players;
   final bool   isDark;
+  final String? selectedPlayerId;
+  final void Function(String)? onPlayerTap;
 
   const _TeamPlayerList({
     required this.teamName, required this.color,
     required this.players,  required this.isDark,
+    this.selectedPlayerId,  this.onPlayerTap,
   });
 
   static String _initial(String name) {
@@ -726,49 +855,63 @@ class _TeamPlayerList extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 4),
-        ...players.map((p) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 2),
-          child: Row(
-            children: [
-              Container(
-                width: 24, height: 24,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: color.withValues(alpha: 0.15),
-                ),
-                child: Center(
-                  child: Text(
-                    _initial(p.name),
-                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: color),
-                  ),
-                ),
+        ...players.map((p) {
+          final isSelected = selectedPlayerId == p.playerId;
+          return GestureDetector(
+            onTap: onPlayerTap != null ? () => onPlayerTap!(p.playerId) : null,
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 2),
+              padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 4),
+              decoration: BoxDecoration(
+                color: isSelected ? color.withValues(alpha: 0.18) : Colors.transparent,
+                borderRadius: BorderRadius.circular(6),
+                border: isSelected
+                    ? Border.all(color: color.withValues(alpha: 0.5))
+                    : null,
               ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      p.name,
-                      style: TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.w500,
-                        color: isDark ? AppColors.slate100 : AppColors.slate800,
-                      ),
-                      overflow: TextOverflow.ellipsis,
+              child: Row(
+                children: [
+                  Container(
+                    width: 24, height: 24,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: color.withValues(alpha: isSelected ? 0.35 : 0.15),
                     ),
-                    if (p.isGoalkeeper)
-                      const Text('Goleiro', style: TextStyle(fontSize: 9, color: AppColors.slate400)),
-                  ],
-                ),
+                    child: Center(
+                      child: Text(
+                        _initial(p.name),
+                        style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: color),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          p.name,
+                          style: TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.w500,
+                            color: isDark ? AppColors.slate100 : AppColors.slate800,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (p.isGoalkeeper)
+                          const Text('Goleiro', style: TextStyle(fontSize: 9, color: AppColors.slate400)),
+                      ],
+                    ),
+                  ),
+                  if (p.weight > 0)
+                    Text(
+                      p.weight.toStringAsFixed(3),
+                      style: const TextStyle(fontSize: 11, color: AppColors.slate400),
+                    ),
+                ],
               ),
-              if (p.weight > 0)
-                Text(
-                  p.weight.toStringAsFixed(3),
-                  style: const TextStyle(fontSize: 11, color: AppColors.slate400),
-                ),
-            ],
-          ),
-        )),
+            ),
+          );
+        }),
       ],
     );
   }

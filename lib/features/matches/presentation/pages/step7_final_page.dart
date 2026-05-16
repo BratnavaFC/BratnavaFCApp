@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../../../core/errors/app_exception.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../providers/match_provider.dart';
 
@@ -29,10 +30,10 @@ class _Step7FinalPageState extends ConsumerState<Step7FinalPage> {
           const SnackBar(content: Text('MVP recalculado com sucesso')),
         );
       }
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Não foi possível recalcular o MVP')),
+          SnackBar(content: Text(extractDioError(e, 'Não foi possível recalcular o MVP'))),
         );
       }
     } finally {

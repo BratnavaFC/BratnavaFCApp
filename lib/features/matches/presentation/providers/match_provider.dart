@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../auth/presentation/providers/account_store.dart';
 import '../../../dashboard/presentation/providers/dashboard_provider.dart';
+import '../../../../core/errors/app_exception.dart';
 import '../../data/datasources/match_remote_datasource.dart';
 import '../../domain/entities/match_models.dart';
 
@@ -220,10 +221,10 @@ class MatchNotifier extends StateNotifier<MatchState> {
       if (e.response?.statusCode == 404) {
         state = state.copyWith(loading: false, matchId: null, step: MatchStep.create);
       } else {
-        state = state.copyWith(loading: false, error: 'Falha ao carregar partida.');
+        state = state.copyWith(loading: false, error: extractDioError(e, 'Falha ao carregar partida.'));
       }
-    } catch (_) {
-      state = state.copyWith(loading: false, error: 'Falha ao carregar dados.');
+    } catch (e) {
+      state = state.copyWith(loading: false, error: extractDioError(e, 'Falha ao carregar dados.'));
     }
   }
 
@@ -242,8 +243,8 @@ class MatchNotifier extends StateNotifier<MatchState> {
       await _ds.createMatch(groupId, placeName, playedAt);
       await loadInitial();
       return true;
-    } catch (_) {
-      state = state.copyWith(mutating: false, error: 'Falha ao criar partida.');
+    } catch (e) {
+      state = state.copyWith(mutating: false, error: extractDioError(e, 'Falha ao criar partida.'));
       return false;
     }
   }
@@ -257,8 +258,8 @@ class MatchNotifier extends StateNotifier<MatchState> {
     try {
       await _ds.acceptInvite(groupId, matchId, playerId);
       await refresh();
-    } catch (_) {
-      state = state.copyWith(error: 'Falha ao aceitar convite.');
+    } catch (e) {
+      state = state.copyWith(error: extractDioError(e, 'Falha ao aceitar convite.'));
     } finally {
       state = state.copyWith(mutating: false);
     }
@@ -271,8 +272,8 @@ class MatchNotifier extends StateNotifier<MatchState> {
     try {
       await _ds.rejectInvite(groupId, matchId, playerId);
       await refresh();
-    } catch (_) {
-      state = state.copyWith(error: 'Falha ao recusar convite.');
+    } catch (e) {
+      state = state.copyWith(error: extractDioError(e, 'Falha ao recusar convite.'));
     } finally {
       state = state.copyWith(mutating: false);
     }
@@ -285,8 +286,8 @@ class MatchNotifier extends StateNotifier<MatchState> {
     try {
       await _ds.goToMatchmaking(groupId, matchId);
       await _loadStepPayload(matchId, MatchStep.teams);
-    } catch (_) {
-      state = state.copyWith(error: 'Falha ao avançar para matchmaking.');
+    } catch (e) {
+      state = state.copyWith(error: extractDioError(e, 'Falha ao avançar para matchmaking.'));
     } finally {
       state = state.copyWith(mutating: false);
     }
@@ -300,8 +301,8 @@ class MatchNotifier extends StateNotifier<MatchState> {
       await _ds.addGuest(groupId, matchId, name, isGoalkeeper, starRating);
       final d = await _ds.fetchAcceptation(groupId, matchId);
       _applyAcceptation(d);
-    } catch (_) {
-      state = state.copyWith(error: 'Falha ao adicionar convidado.');
+    } catch (e) {
+      state = state.copyWith(error: extractDioError(e, 'Falha ao adicionar convidado.'));
     } finally {
       state = state.copyWith(mutating: false);
     }
@@ -333,13 +334,37 @@ class MatchNotifier extends StateNotifier<MatchState> {
         includeGoalkeepers: includeGoalkeepers,
       );
       state = state.copyWith(teamGenOptions: options, mutating: false);
-    } catch (_) {
-      state = state.copyWith(mutating: false, error: 'Falha ao gerar times.');
+    } catch (e) {
+      state = state.copyWith(mutating: false, error: extractDioError(e, 'Falha ao gerar times.'));
     }
   }
 
   void selectTeamGenOption(int idx) {
     state = state.copyWith(selectedTeamGenIdx: idx);
+  }
+
+  void editTeamGenOption(
+    int idx,
+    List<TeamGenPlayer> teamA,
+    List<TeamGenPlayer> teamB,
+  ) {
+    final opts = List<TeamGenOption>.from(state.teamGenOptions);
+    if (idx < 0 || idx >= opts.length) return;
+    final wA = teamA.fold(0.0, (s, p) => s + p.weight);
+    final wB = teamB.fold(0.0, (s, p) => s + p.weight);
+    opts[idx] = TeamGenOption(
+      teamA:       teamA,
+      teamB:       teamB,
+      unassigned:  opts[idx].unassigned,
+      teamAWeight: wA,
+      teamBWeight: wB,
+      balanceDiff: (wA - wB).abs(),
+      attackDiff:  opts[idx].attackDiff,
+      defenseDiff: opts[idx].defenseDiff,
+      physicalDiff: opts[idx].physicalDiff,
+      explanation: opts[idx].explanation,
+    );
+    state = state.copyWith(teamGenOptions: opts);
   }
 
   Future<void> assignTeamsFromGenerated() async {
@@ -354,8 +379,8 @@ class MatchNotifier extends StateNotifier<MatchState> {
       await _ds.assignTeams(groupId, matchId, teamAIds, teamBIds);
       state = state.copyWith(teamGenOptions: [], selectedTeamGenIdx: 0);
       await refresh();
-    } catch (_) {
-      state = state.copyWith(error: 'Falha ao atribuir times.');
+    } catch (e) {
+      state = state.copyWith(error: extractDioError(e, 'Falha ao atribuir times.'));
     } finally {
       state = state.copyWith(mutating: false);
     }
@@ -368,8 +393,11 @@ class MatchNotifier extends StateNotifier<MatchState> {
     try {
       await _ds.setColors(groupId, matchId, teamAColorId, teamBColorId);
       await refresh();
-    } catch (_) {
-      state = state.copyWith(error: 'Falha ao definir cores.');
+    } catch (e) {
+      final fallback = e is Exception
+          ? e.toString().replaceFirst('Exception: ', '')
+          : 'Falha ao definir cores.';
+      state = state.copyWith(error: extractDioError(e, fallback));
     } finally {
       state = state.copyWith(mutating: false);
     }
@@ -395,8 +423,8 @@ class MatchNotifier extends StateNotifier<MatchState> {
     try {
       await _ds.assignTeams(groupId, matchId, newA, newB);
       await refresh();
-    } catch (_) {
-      state = state.copyWith(error: 'Falha ao mover jogador.');
+    } catch (e) {
+      state = state.copyWith(error: extractDioError(e, 'Falha ao mover jogador.'));
     } finally {
       state = state.copyWith(mutating: false);
     }
@@ -413,8 +441,8 @@ class MatchNotifier extends StateNotifier<MatchState> {
     try {
       await _ds.assignTeams(groupId, matchId, newA, newB);
       await refresh();
-    } catch (_) {
-      state = state.copyWith(error: 'Falha ao atribuir jogador.');
+    } catch (e) {
+      state = state.copyWith(error: extractDioError(e, 'Falha ao atribuir jogador.'));
     } finally {
       state = state.copyWith(mutating: false);
     }
@@ -427,8 +455,8 @@ class MatchNotifier extends StateNotifier<MatchState> {
     try {
       await _ds.swapPlayers(groupId, matchId, playerAId, playerBId);
       await refresh();
-    } catch (_) {
-      state = state.copyWith(error: 'Falha ao trocar jogadores.');
+    } catch (e) {
+      state = state.copyWith(error: extractDioError(e, 'Falha ao trocar jogadores.'));
     } finally {
       state = state.copyWith(mutating: false);
     }
@@ -441,8 +469,8 @@ class MatchNotifier extends StateNotifier<MatchState> {
     try {
       await _ds.setPlayerRole(groupId, matchId, matchPlayerId, isGoalkeeper);
       await refresh();
-    } catch (_) {
-      state = state.copyWith(error: 'Falha ao alterar função do jogador.');
+    } catch (e) {
+      state = state.copyWith(error: extractDioError(e, 'Falha ao alterar função do jogador.'));
     } finally {
       state = state.copyWith(mutating: false);
     }
@@ -457,11 +485,17 @@ class MatchNotifier extends StateNotifier<MatchState> {
     try {
       await _ds.startMatch(groupId, matchId);
       await _loadStepPayload(matchId, MatchStep.playing);
-    } catch (_) {
-      state = state.copyWith(error: 'Falha ao iniciar partida.');
+    } catch (e) {
+      state = state.copyWith(error: extractDioError(e, 'Falha ao iniciar partida.'));
     } finally {
       state = state.copyWith(mutating: false);
     }
+  }
+
+  Future<void> publishEvent(String eventType) async {
+    final matchId = state.matchId;
+    if (matchId == null) return;
+    await _ds.publishMatchEvent(groupId, matchId, {'type': eventType});
   }
 
   Future<void> addGoal({
@@ -481,8 +515,8 @@ class MatchNotifier extends StateNotifier<MatchState> {
         isOwnGoal:      isOwnGoal,
       );
       await refresh();
-    } catch (_) {
-      state = state.copyWith(error: 'Falha ao adicionar gol.');
+    } catch (e) {
+      state = state.copyWith(error: extractDioError(e, 'Falha ao adicionar gol.'));
     } finally {
       state = state.copyWith(mutating: false);
     }
@@ -495,8 +529,33 @@ class MatchNotifier extends StateNotifier<MatchState> {
     try {
       await _ds.removeGoal(groupId, matchId, goalId);
       await refresh();
-    } catch (_) {
-      state = state.copyWith(error: 'Falha ao remover gol.');
+    } catch (e) {
+      state = state.copyWith(error: extractDioError(e, 'Falha ao remover gol.'));
+    } finally {
+      state = state.copyWith(mutating: false);
+    }
+  }
+
+  Future<void> updateGoal({
+    required String goalId,
+    required String scorerPlayerId,
+    String? assistPlayerId,
+    required String time,
+    required bool isOwnGoal,
+  }) async {
+    final matchId = state.matchId;
+    if (matchId == null) return;
+    state = state.copyWith(mutating: true);
+    try {
+      await _ds.updateGoal(groupId, matchId, goalId, {
+        'scorerPlayerId': scorerPlayerId,
+        if (assistPlayerId != null) 'assistPlayerId': assistPlayerId,
+        'time': time,
+        'isOwnGoal': isOwnGoal,
+      });
+      await refresh();
+    } catch (e) {
+      state = state.copyWith(error: extractDioError(e, 'Falha ao atualizar gol.'));
     } finally {
       state = state.copyWith(mutating: false);
     }
@@ -510,8 +569,8 @@ class MatchNotifier extends StateNotifier<MatchState> {
       await _ds.endMatch(groupId, matchId);
       await _loadStepPayload(matchId, MatchStep.ended);
       return true;
-    } catch (_) {
-      state = state.copyWith(error: 'Falha ao encerrar partida.');
+    } catch (e) {
+      state = state.copyWith(error: extractDioError(e, 'Falha ao encerrar partida.'));
       return false;
     } finally {
       state = state.copyWith(mutating: false);
@@ -528,8 +587,8 @@ class MatchNotifier extends StateNotifier<MatchState> {
       await _ds.goToPostGame(groupId, matchId);
       await _loadStepPayload(matchId, MatchStep.post);
       return true;
-    } catch (_) {
-      state = state.copyWith(error: 'Falha ao ir para pós-jogo.');
+    } catch (e) {
+      state = state.copyWith(error: extractDioError(e, 'Falha ao ir para pós-jogo.'));
       return false;
     } finally {
       state = state.copyWith(mutating: false);
@@ -545,22 +604,24 @@ class MatchNotifier extends StateNotifier<MatchState> {
     try {
       await _ds.setScore(groupId, matchId, teamAGoals, teamBGoals);
       await refresh();
-    } catch (_) {
-      state = state.copyWith(error: 'Falha ao registrar placar.');
+    } catch (e) {
+      state = state.copyWith(error: extractDioError(e, 'Falha ao registrar placar.'));
     } finally {
       state = state.copyWith(mutating: false);
     }
   }
 
-  Future<void> voteMvp(String voterMpId, String votedMpId) async {
+  Future<bool> voteMvp(String voterMpId, String votedMpId) async {
     final matchId = state.matchId;
-    if (matchId == null) return;
+    if (matchId == null) return false;
     state = state.copyWith(mutating: true);
     try {
       await _ds.voteMvp(groupId, matchId, voterMpId, votedMpId);
       await refresh();
-    } catch (_) {
-      state = state.copyWith(error: 'Falha ao registrar voto.');
+      return true;
+    } catch (e) {
+      state = state.copyWith(error: extractDioError(e, 'Falha ao registrar voto.'));
+      return false;
     } finally {
       state = state.copyWith(mutating: false);
     }
@@ -574,8 +635,8 @@ class MatchNotifier extends StateNotifier<MatchState> {
       await _ds.finalizeMatch(groupId, matchId);
       await _loadStepPayload(matchId, MatchStep.done);
       return true;
-    } catch (_) {
-      state = state.copyWith(error: 'Falha ao finalizar partida.');
+    } catch (e) {
+      state = state.copyWith(error: extractDioError(e, 'Falha ao finalizar partida.'));
       return false;
     } finally {
       state = state.copyWith(mutating: false);
@@ -591,8 +652,8 @@ class MatchNotifier extends StateNotifier<MatchState> {
     try {
       await _ds.rewindStep(groupId, matchId);
       await refresh();
-    } catch (_) {
-      state = state.copyWith(error: 'Falha ao voltar etapa.');
+    } catch (e) {
+      state = state.copyWith(error: extractDioError(e, 'Falha ao voltar etapa.'));
     } finally {
       state = state.copyWith(mutating: false);
     }

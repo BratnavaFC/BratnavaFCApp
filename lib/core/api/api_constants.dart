@@ -26,11 +26,12 @@ class ApiConstants {
       '/api/TeamGeneration/visual-stats/$groupId';
 
   // Players (group admin)
-  static const String playersCreate                = '/api/Players';
-  static String groupPlayers(String groupId)       => '/api/Players/group/$groupId';
-  static String playerOps(String id)               => '/api/Players/$id';
-  static String playerLeaveGroup(String id)         => '/api/players/$id/leave';
-  static String playerRemoveFromGroup(String id)   => '/api/Players/$id/remove-from-group';
+  static const String playersCreate                  = '/api/Players';
+  static String groupPlayers(String groupId)         => '/api/Players/group/$groupId';
+  static String playerOps(String id)                 => '/api/Players/$id';
+  static String playerLeaveGroup(String id)          => '/api/players/$id/leave';
+  static String playerRemoveFromGroup(String id)     => '/api/Players/$id/remove-from-group';
+  static String playerToggleGoalkeeper(String id)    => '/api/Players/$id/toggle-goalkeeper';
 
   // Group invites
   static String groupInvites(String groupId)            => '/api/Groups/$groupId/invites';

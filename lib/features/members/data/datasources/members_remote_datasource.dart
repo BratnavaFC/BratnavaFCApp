@@ -137,6 +137,11 @@ class MembersRemoteDataSource {
     _throwIfError(res.data);
   }
 
+  Future<void> toggleGoalkeeper(String playerId) async {
+    final res = await _dio.patch(ApiConstants.playerToggleGoalkeeper(playerId));
+    _throwIfError(res.data);
+  }
+
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
   void _throwIfError(dynamic data) {

@@ -104,9 +104,9 @@ class MatchPlayerInfo {
 
   static InviteResponse _parseInvite(dynamic v) {
     final n = v is int ? v : int.tryParse(v?.toString() ?? '') ?? 0;
-    if (n == 1) return InviteResponse.accepted;
-    if (n == 2) return InviteResponse.declined;
-    return InviteResponse.pending;
+    if (n == 3) return InviteResponse.accepted;  // backend: Accepted = 3
+    if (n == 2) return InviteResponse.declined;  // backend: Rejected = 2
+    return InviteResponse.pending;               // backend: None = 1
   }
 
   factory MatchPlayerInfo.fromJson(Map<String, dynamic> j) => MatchPlayerInfo(

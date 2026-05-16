@@ -441,7 +441,7 @@ class _CreateMatchView extends StatelessWidget {
                 icon: mutating
                     ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                     : const Icon(Icons.add),
-                label: const Text('+ Criar Partida'),
+                label: const Text('Criar Partida'),
               ),
             ),
           ),

@@ -138,6 +138,31 @@ class AuthNotifier extends AsyncNotifier<void> {
     }
   }
 
+  /// Re-busca roles + grupos do usuário e atualiza activeGroupId se ainda não definido.
+  /// Chamado após aceitar convite de grupo ou criar nova patota.
+  Future<void> refreshGroupMembership() async {
+    final account = ref.read(accountStoreProvider).activeAccount;
+    if (account == null) return;
+    try {
+      final dataSource = ref.read(_authDataSourceProvider);
+      final (roles, groupIds) = await (
+        dataSource.fetchGroupRoles(account.userId),
+        dataSource.fetchMyGroupIds(),
+      ).wait;
+
+      final resolvedGroupId = account.activeGroupId ??
+          (groupIds.length == 1 ? groupIds.first : null);
+
+      await ref.read(accountStoreProvider.notifier).upsertAccount(
+        account.copyWith(
+          groupAdminIds:      roles['adminIds'],
+          groupFinanceiroIds: roles['financeiroIds'],
+          activeGroupId:      resolvedGroupId,
+        ),
+      );
+    } catch (_) {}
+  }
+
   /// Tenta renovar o token proativamente antes de expirar.
   /// Delega ao AuthInterceptor para reutilizar a lógica de envelope e mutex.
   Future<void> proactiveRefresh() async {

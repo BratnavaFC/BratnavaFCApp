@@ -29,16 +29,21 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
   DateTime              _cursor = DateTime.now();
   List<CalendarEvent>   _events = [];
   bool                  _loading = false;
+  String                _lastFetchedGroupId = '';
 
   CalendarRemoteDataSource get _ds => ref.read(calendarDsProvider);
 
-  String get _groupId =>
-      ref.read(accountStoreProvider).activeAccount?.activeGroupId ?? '';
+  String get _groupId {
+    final acc    = ref.read(accountStoreProvider).activeAccount;
+    final player = ref.read(activePlayerProvider);
+    return acc?.activeGroupId ?? player?.groupId ?? '';
+  }
 
   bool get _isAdmin {
     final acc = ref.read(accountStoreProvider).activeAccount;
     if (acc == null) return false;
-    return acc.isAdmin || acc.groupAdminIds.contains(_groupId);
+    final gid = _groupId;
+    return acc.isAdmin || acc.groupAdminIds.contains(gid);
   }
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
@@ -52,13 +57,19 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
   // ── Data ──────────────────────────────────────────────────────────────────
 
   Future<void> _fetchEvents() async {
-    if (_groupId.isEmpty) return;
+    final gid = _groupId;
+    if (gid.isEmpty) return;
     final range = _rangeForView();
     setState(() => _loading = true);
     try {
-      final evs = await _ds.fetchEvents(
-        _groupId, toDateStr(range.start), toDateStr(range.end));
-      if (mounted) setState(() { _events = evs; _loading = false; });
+      final evs = await _ds.fetchEvents(gid, toDateStr(range.start), toDateStr(range.end));
+      if (mounted) {
+        setState(() {
+          _events = evs;
+          _loading = false;
+          _lastFetchedGroupId = gid;
+        });
+      }
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
@@ -241,10 +252,14 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
     final activePlayer = ref.watch(activePlayerProvider);
     final resolvedId   = account?.activeGroupId ?? activePlayer?.groupId ?? '';
 
-    // Quando o grupo é resolvido após o login (race condition),
-    // dispara o carregamento de eventos se ainda não carregou.
-    if (resolvedId.isNotEmpty && _events.isEmpty && !_loading) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _fetchEvents());
+    // Re-busca quando o grupo resolve (bootstrap async) ou troca de conta.
+    if (resolvedId.isNotEmpty && resolvedId != _lastFetchedGroupId && !_loading) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() => _events = []);
+          _fetchEvents();
+        }
+      });
     }
 
     if (resolvedId.isEmpty) {

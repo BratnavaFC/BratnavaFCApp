@@ -578,9 +578,11 @@ class _UserMenuButton extends ConsumerWidget {
         activePlayer: activePlayer,
         onAccountSwitch: (userId) {
           ref.read(accountStoreProvider.notifier).setActive(userId);
-          // Reseta o jogador selecionado manualmente para não exibir
-          // o jogador da conta anterior enquanto os novos dados carregam.
+          // Reseta player manual e invalida cache de players da conta anterior.
           ref.read(activePlayerIdProvider.notifier).state = null;
+          ref.invalidate(myPlayersProvider);
+          // Atualiza roles e grupo da nova conta ativa.
+          ref.read(authNotifierProvider.notifier).refreshGroupMembership();
           context.go('/app');
         },
         onPlayerSwitch: (player) {

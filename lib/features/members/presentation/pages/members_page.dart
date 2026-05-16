@@ -6,6 +6,10 @@ import '../../../auth/domain/entities/account.dart';
 import '../../../auth/presentation/providers/account_store.dart';
 import '../../domain/entities/app_user.dart';
 import '../providers/members_provider.dart';
+import '../../../groups/presentation/providers/group_invites_provider.dart';
+import '../../../groups/domain/entities/group_invite.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../../dashboard/presentation/providers/dashboard_provider.dart';
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
@@ -816,14 +820,69 @@ class _FieldRow extends StatelessWidget {
 
 // ── Convites de patota card ───────────────────────────────────────────────────
 
-class _InvitesCard extends StatelessWidget {
+class _InvitesCard extends ConsumerStatefulWidget {
   final bool isDark;
   const _InvitesCard({required this.isDark});
 
   @override
+  ConsumerState<_InvitesCard> createState() => _InvitesCardState();
+}
+
+class _InvitesCardState extends ConsumerState<_InvitesCard> {
+  final Set<String> _loading = {};
+
+  Future<void> _accept(GroupInvite invite) async {
+    setState(() => _loading.add(invite.id));
+    try {
+      await ref.read(groupInvitesDsProvider).acceptInvite(invite.id);
+      ref.invalidate(myGroupInvitesProvider);
+      ref.invalidate(myGroupInviteCountProvider);
+      await ref.read(authNotifierProvider.notifier).refreshGroupMembership();
+      ref.invalidate(myPlayersProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Você entrou em ${invite.groupName}!')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao aceitar convite: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading.remove(invite.id));
+    }
+  }
+
+  Future<void> _reject(GroupInvite invite) async {
+    setState(() => _loading.add('reject_${invite.id}'));
+    try {
+      await ref.read(groupInvitesDsProvider).rejectInvite(invite.id);
+      ref.invalidate(myGroupInvitesProvider);
+      ref.invalidate(myGroupInviteCountProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Convite recusado.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao recusar convite: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading.remove('reject_${invite.id}'));
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final isDark = widget.isDark;
     final bg = isDark ? AppColors.slate800 : Colors.white;
     final border = isDark ? AppColors.slate700 : AppColors.slate200;
+    final invitesAsync = ref.watch(myGroupInvitesProvider);
 
     return Container(
       decoration: BoxDecoration(
@@ -849,26 +908,148 @@ class _InvitesCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
-                    color:
-                        isDark ? AppColors.slate100 : AppColors.slate800,
+                    color: isDark ? AppColors.slate100 : AppColors.slate800,
                   ),
                 ),
               ],
             ),
           ),
-          Divider(
-            height: 1,
-            color: isDark ? AppColors.slate700 : AppColors.slate100,
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              'Nenhum convite pendente.',
-              style: TextStyle(
-                fontSize: 13,
-                color: isDark ? AppColors.slate500 : AppColors.slate400,
+          Divider(height: 1, color: isDark ? AppColors.slate700 : AppColors.slate100),
+          invitesAsync.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            ),
+            error: (e, _) => Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'Erro ao carregar convites.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: isDark ? AppColors.slate500 : AppColors.slate400,
+                ),
               ),
             ),
+            data: (invites) {
+              if (invites.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    'Nenhum convite pendente.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isDark ? AppColors.slate500 : AppColors.slate400,
+                    ),
+                  ),
+                );
+              }
+              return Column(
+                children: invites.map((invite) => _InviteRow(
+                  invite: invite,
+                  isDark: isDark,
+                  acceptLoading: _loading.contains(invite.id),
+                  rejectLoading: _loading.contains('reject_${invite.id}'),
+                  onAccept: () => _accept(invite),
+                  onReject: () => _reject(invite),
+                )).toList(),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InviteRow extends StatelessWidget {
+  final GroupInvite invite;
+  final bool isDark;
+  final bool acceptLoading;
+  final bool rejectLoading;
+  final VoidCallback onAccept;
+  final VoidCallback onReject;
+
+  const _InviteRow({
+    required this.invite,
+    required this.isDark,
+    required this.acceptLoading,
+    required this.rejectLoading,
+    required this.onAccept,
+    required this.onReject,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.emerald500.withAlpha(30),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.group, color: AppColors.emerald500, size: 20),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      invite.groupName,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? AppColors.slate100 : AppColors.slate800,
+                      ),
+                    ),
+                    if (invite.invitedByName != null)
+                      Text(
+                        'Convidado por ${invite.invitedByName}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark ? AppColors.slate400 : AppColors.slate500,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: rejectLoading ? null : onReject,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.rose500,
+                    side: const BorderSide(color: AppColors.rose500),
+                  ),
+                  child: rejectLoading
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Text('Recusar'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton(
+                  onPressed: acceptLoading ? null : onAccept,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.emerald500,
+                  ),
+                  child: acceptLoading
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Text('Aceitar'),
+                ),
+              ),
+            ],
           ),
         ],
       ),

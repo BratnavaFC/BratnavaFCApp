@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/api/api_constants.dart';
 import '../../../auth/presentation/providers/account_store.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../../dashboard/presentation/providers/dashboard_provider.dart';
 
 extension _FirstOrNullExt<T> on Iterable<T> {
   T? get firstOrNull => isEmpty ? null : first;
@@ -458,7 +459,8 @@ class _GroupsPageState extends ConsumerState<GroupsPage> {
 
           await _loadMine();
           await _loadAdminGroups();
-          ref.read(authNotifierProvider.notifier).refreshRoles();
+          await ref.read(authNotifierProvider.notifier).refreshGroupMembership();
+          ref.invalidate(myPlayersProvider);
         },
       ),
     );

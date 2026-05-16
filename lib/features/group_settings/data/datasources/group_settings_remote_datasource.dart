@@ -82,26 +82,20 @@ class GroupSettingsRemoteDataSource {
     await _dio.delete(ApiConstants.groupFinanceiroById(groupId, userId));
   }
 
-  // ── User search ───────────────────────────────────────────────────────────
-  // GET /api/Users?search={q}&pageSize=8
-  // Response envelope: { data: { items: [...] } }
+  // ── Group players (used for admin/financeiro candidate list) ─────────────
+  // Reuses GET /api/Groups/{groupId} which already returns the players array.
+  // Returns only linked (non-guest) members — candidates for admin/financeiro.
 
-  Future<List<GroupMember>> searchUsers(String query) async {
-    if (query.trim().length < 2) return [];
-    final res = await _dio.get(
-      ApiConstants.users,
-      queryParameters: {'search': query.trim(), 'pageSize': 8},
-    );
-    final envelope = res.data;
-    // path: data.data.items (mirrors site: res.data.data.items)
-    dynamic inner = envelope;
-    if (inner is Map) inner = inner['data'];
-    if (inner is Map) inner = inner['items'];
-    final list = inner as List?;
+  Future<List<GroupMember>> fetchGroupPlayers(String groupId) async {
+    final res = await _dio.get(ApiConstants.groupById(groupId));
+    dynamic body = res.data;
+    if (body is Map) body = body['data'] ?? body;
+    final playersRaw = (body as Map<String, dynamic>?)?['players'];
+    final list = (playersRaw as List?)?.whereType<Map<String, dynamic>>() ?? [];
     return list
-            ?.whereType<Map<String, dynamic>>()
-            .map(GroupMember.fromSearchResult)
-            .toList() ??
-        [];
+        .where((p) =>
+            (p['userId'] as String? ?? '').isNotEmpty && p['isGuest'] != true)
+        .map(GroupMember.fromPlayerJson)
+        .toList();
   }
 }

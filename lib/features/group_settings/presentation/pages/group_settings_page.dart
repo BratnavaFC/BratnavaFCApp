@@ -1917,12 +1917,19 @@ class _AddMemberDialog extends StatefulWidget {
 class _AddMemberDialogState extends State<_AddMemberDialog> {
   final _ctrl = TextEditingController();
 
-  List<GroupMember>      _results    = [];
-  bool                   _searching  = false;
-  String?                _searchErr;
-  Set<String>            _added      = {};
-  Map<String, bool>      _adding     = {};
-  Map<String, String>    _addErr     = {};
+  List<GroupMember>   _allPlayers = [];
+  List<GroupMember>   _results    = [];
+  bool                _loading    = true;
+  String?             _searchErr;
+  Set<String>         _added      = {};
+  Map<String, bool>   _adding     = {};
+  Map<String, String> _addErr     = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPlayers();
+  }
 
   @override
   void dispose() {
@@ -1930,18 +1937,29 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
     super.dispose();
   }
 
-  Future<void> _search(String query) async {
-    if (query.trim().length < 2) {
+  Future<void> _loadPlayers() async {
+    try {
+      final players = await widget.ds.fetchGroupPlayers(widget.groupId);
+      if (mounted) setState(() { _allPlayers = players; _loading = false; });
+    } catch (_) {
+      if (mounted) setState(() { _loading = false; _searchErr = 'Erro ao carregar membros.'; });
+    }
+  }
+
+  void _search(String query) {
+    final q = query.trim().toLowerCase();
+    if (q.length < 2) {
       setState(() { _results = []; _searchErr = null; });
       return;
     }
-    setState(() { _searching = true; _searchErr = null; });
-    try {
-      final res = await widget.ds.searchUsers(query.trim());
-      if (mounted) setState(() { _results = res; _searching = false; });
-    } catch (_) {
-      if (mounted) setState(() { _searching = false; _searchErr = 'Erro ao buscar usuários.'; });
-    }
+    setState(() {
+      _searchErr = null;
+      _results = _allPlayers.where((m) {
+        final name     = m.displayName.toLowerCase();
+        final login    = (m.userName ?? '').toLowerCase();
+        return name.contains(q) || login.contains(q);
+      }).toList();
+    });
   }
 
   Future<void> _add(GroupMember user) async {
@@ -2054,7 +2072,7 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
                       fontSize: 13),
                   prefixIcon: Icon(Icons.search_rounded, size: 18,
                       color: isDark ? AppColors.slate400 : AppColors.slate400),
-                  suffixIcon: _searching
+                  suffixIcon: _loading
                       ? const Padding(
                           padding: EdgeInsets.all(10),
                           child: SizedBox(width: 14, height: 14,
@@ -2092,13 +2110,13 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
                             style: const TextStyle(
                                 color: AppColors.rose500, fontSize: 12)),
                       )
-                    else if (!_searching && _ctrl.text.trim().length < 2)
+                    else if (!_loading && _ctrl.text.trim().length < 2)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 20),
                         child: Text(
                           _ctrl.text.trim().length == 1
                               ? 'Continue digitando...'
-                              : 'Digite para buscar usuários.',
+                              : 'Digite para buscar membros da patota.',
                           style: TextStyle(
                             fontSize: 12,
                             color:    isDark ? AppColors.slate500 : AppColors.slate400,
@@ -2106,12 +2124,12 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
                           textAlign: TextAlign.center,
                         ),
                       )
-                    else if (!_searching && _results.isEmpty &&
+                    else if (!_loading && _results.isEmpty &&
                         _ctrl.text.trim().length >= 2)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 20),
                         child: Text(
-                          'Nenhum usuário encontrado para "${_ctrl.text}".',
+                          'Nenhum membro encontrado para "${_ctrl.text}".',
                           style: TextStyle(
                             fontSize: 12,
                             color:    isDark ? AppColors.slate500 : AppColors.slate400,

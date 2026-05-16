@@ -22,8 +22,9 @@ class MembersPage extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     if (account == null) return const SizedBox.shrink();
 
-    // Admin = system admin OU membro da lista de administradores de qualquer patota
-    final isAdmin = account.isAdmin || account.groupAdminIds.isNotEmpty;
+    final isAdmin = account.roles.any(
+      (r) => r.toLowerCase() == 'admin' || r.toLowerCase() == 'godmode',
+    );
 
     return isAdmin
         ? _AdminUsersPage(currentUserId: account.userId, isDark: isDark)

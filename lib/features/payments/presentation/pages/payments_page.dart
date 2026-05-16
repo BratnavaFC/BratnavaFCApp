@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/errors/app_exception.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/date_utils.dart';
 import '../../../auth/presentation/providers/account_store.dart';
 import '../../../dashboard/presentation/providers/dashboard_provider.dart';
 import '../../../group_settings/presentation/providers/group_settings_provider.dart';
+import '../../../members/presentation/providers/members_provider.dart';
 import '../../data/datasources/payments_remote_datasource.dart';
 import '../../domain/entities/payment_entities.dart';
 import '../providers/payments_provider.dart';
@@ -94,6 +96,25 @@ class _PaymentsPageState extends ConsumerState<PaymentsPage>
     if (gid == null) return;
     ref.invalidate(extraChargesProvider(gid));
     ref.invalidate(myExtraChargesProvider(gid));
+  }
+
+  // ── Alternar goleiro/linha ────────────────────────────────────────────────
+
+  Future<void> _toggleGoalkeeper(PlayerRow row) async {
+    try {
+      await ref.read(membersDsProvider).toggleGoalkeeper(row.playerId);
+      final gid = _groupId;
+      if (gid != null) {
+        ref.invalidate(monthlyGridProvider((groupId: gid, year: _year)));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(extractDioError(e, 'Falha ao alterar posição.')),
+          backgroundColor: AppColors.rose500,
+        ));
+      }
+    }
   }
 
   // ── Abrir sheet de pagamento mensal ──────────────────────────────────────
@@ -282,9 +303,10 @@ class _PaymentsPageState extends ConsumerState<PaymentsPage>
                   if (_paymentMode == 0)
                     _MonthlyTab(
                       groupId: groupId, year: _year, isAdmin: isAdmin,
-                      onYearChanged: (y) => setState(() => _year = y),
-                      onOpenSheet:   (ctx, row, month) =>
+                      onYearChanged:        (y) => setState(() => _year = y),
+                      onOpenSheet:          (ctx, row, month) =>
                           _openMonthlySheet(ctx, row, month),
+                      onToggleGoalkeeper:   isAdmin ? _toggleGoalkeeper : null,
                     ),
                   _ExtraTab(
                     groupId:     groupId,
@@ -361,6 +383,7 @@ class _MonthlyTab extends ConsumerWidget {
   final bool    isAdmin;
   final void Function(int) onYearChanged;
   final Future<void> Function(BuildContext, PlayerRow, int) onOpenSheet;
+  final Future<void> Function(PlayerRow)? onToggleGoalkeeper;
 
   const _MonthlyTab({
     required this.groupId,
@@ -368,6 +391,7 @@ class _MonthlyTab extends ConsumerWidget {
     required this.isAdmin,
     required this.onYearChanged,
     required this.onOpenSheet,
+    this.onToggleGoalkeeper,
   });
 
   @override
@@ -376,12 +400,13 @@ class _MonthlyTab extends ConsumerWidget {
 
     return isAdmin
         ? _AdminMonthlyView(
-            groupId:       groupId,
-            year:          year,
-            isDark:        isDark,
-            onYearChanged: onYearChanged,
-            onOpenSheet:   onOpenSheet,
-            ref:           ref,
+            groupId:             groupId,
+            year:                year,
+            isDark:              isDark,
+            onYearChanged:       onYearChanged,
+            onOpenSheet:         onOpenSheet,
+            onToggleGoalkeeper:  onToggleGoalkeeper,
+            ref:                 ref,
           )
         : _UserMonthlyView(
             groupId:       groupId,
@@ -402,6 +427,7 @@ class _AdminMonthlyView extends StatefulWidget {
   final bool    isDark;
   final void Function(int) onYearChanged;
   final Future<void> Function(BuildContext, PlayerRow, int) onOpenSheet;
+  final Future<void> Function(PlayerRow)? onToggleGoalkeeper;
   final WidgetRef ref;
 
   const _AdminMonthlyView({
@@ -410,6 +436,7 @@ class _AdminMonthlyView extends StatefulWidget {
     required this.isDark,
     required this.onYearChanged,
     required this.onOpenSheet,
+    this.onToggleGoalkeeper,
     required this.ref,
   });
 
@@ -436,12 +463,27 @@ class _AdminMonthlyViewState extends State<_AdminMonthlyView> {
           const SizedBox(width: 12),
           gridAsync.maybeWhen(
             data: (grid) => grid.monthlyFee != null
-                ? Text(
-                    'Mensalidade: R\$ ${grid.monthlyFee!.toStringAsFixed(2)}',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: widget.isDark ? AppColors.slate400 : AppColors.slate500,
-                    ),
+                ? Wrap(
+                    spacing: 8,
+                    children: [
+                      Text(
+                        grid.goalkeeperMonthlyFee != null
+                            ? 'Jogador: R\$ ${grid.monthlyFee!.toStringAsFixed(2)}'
+                            : 'Mensalidade: R\$ ${grid.monthlyFee!.toStringAsFixed(2)}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: widget.isDark ? AppColors.slate400 : AppColors.slate500,
+                        ),
+                      ),
+                      if (grid.goalkeeperMonthlyFee != null)
+                        Text(
+                          'Goleiro: R\$ ${grid.goalkeeperMonthlyFee!.toStringAsFixed(2)}',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: widget.isDark ? AppColors.slate400 : AppColors.slate500,
+                          ),
+                        ),
+                    ],
                   )
                 : Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -476,10 +518,11 @@ class _AdminMonthlyViewState extends State<_AdminMonthlyView> {
               );
             }
             return _MonthlyGrid(
-              grid:         grid,
-              currentMonth: currentMonth,
-              isDark:       widget.isDark,
-              onTap:        (row, month) => widget.onOpenSheet(context, row, month),
+              grid:                grid,
+              currentMonth:        currentMonth,
+              isDark:              widget.isDark,
+              onTap:               (row, month) => widget.onOpenSheet(context, row, month),
+              onToggleGoalkeeper:  widget.onToggleGoalkeeper,
             );
           },
         ),
@@ -612,12 +655,14 @@ class _MonthlyGrid extends StatelessWidget {
   final int           currentMonth;
   final bool          isDark;
   final void Function(PlayerRow, int) onTap;
+  final Future<void> Function(PlayerRow)? onToggleGoalkeeper;
 
   const _MonthlyGrid({
     required this.grid,
     required this.currentMonth,
     required this.isDark,
     required this.onTap,
+    this.onToggleGoalkeeper,
   });
 
   @override
@@ -670,11 +715,51 @@ class _MonthlyGrid extends StatelessWidget {
                 ),
                 cells: [
                   DataCell(
-                    Text(row.playerName,
-                        style: TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.w500,
-                          color: isDark ? AppColors.slate100 : AppColors.slate800,
-                        )),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(row.playerName,
+                            style: TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w500,
+                              color: isDark ? AppColors.slate100 : AppColors.slate800,
+                            )),
+                        if (onToggleGoalkeeper != null) ...[
+                          const SizedBox(width: 6),
+                          GestureDetector(
+                            onTap: () => onToggleGoalkeeper!(row),
+                            child: Tooltip(
+                              message: row.isGoalkeeper
+                                  ? 'Goleiro — toque para mudar para linha'
+                                  : 'Linha — toque para mudar para goleiro',
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: row.isGoalkeeper
+                                      ? AppColors.violet50
+                                      : (isDark ? AppColors.slate700 : AppColors.slate100),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(
+                                    color: row.isGoalkeeper
+                                        ? AppColors.violet200
+                                        : (isDark ? AppColors.slate600 : AppColors.slate200),
+                                  ),
+                                ),
+                                child: Text(
+                                  row.isGoalkeeper ? 'GK' : 'LN',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w700,
+                                    color: row.isGoalkeeper
+                                        ? AppColors.violet600
+                                        : (isDark ? AppColors.slate400 : AppColors.slate500),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                   for (var m = 1; m <= 12; m++) ...[
                     () {

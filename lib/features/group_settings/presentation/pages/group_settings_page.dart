@@ -237,6 +237,7 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
   late final TextEditingController _minCtrl;
   late final TextEditingController _maxCtrl;
   late final TextEditingController _feeCtrl;
+  late final TextEditingController _goalkeeperFeeCtrl;
 
   late int?    _dayOfWeek;    // null = "Sem padrão"
   late String? _kickoffTime;  // "HH:mm" for display; saved as "HH:mm:ss"
@@ -270,8 +271,11 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
     _placeCtrl = TextEditingController(text: s.defaultPlaceName ?? '');
     _minCtrl   = TextEditingController(text: s.minPlayers.toString());
     _maxCtrl   = TextEditingController(text: s.maxPlayers.toString());
-    _feeCtrl   = TextEditingController(
+    _feeCtrl            = TextEditingController(
       text: s.monthlyFee != null ? s.monthlyFee!.toStringAsFixed(2) : '',
+    );
+    _goalkeeperFeeCtrl  = TextEditingController(
+      text: s.goalkeeperMonthlyFee != null ? s.goalkeeperMonthlyFee!.toStringAsFixed(2) : '',
     );
     _dayOfWeek    = s.defaultDayOfWeek;
     // API stores "HH:mm:ss" — display only "HH:mm"
@@ -298,6 +302,7 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
     _minCtrl.dispose();
     _maxCtrl.dispose();
     _feeCtrl.dispose();
+    _goalkeeperFeeCtrl.dispose();
     _mvpMaxCtrl.dispose();
     super.dispose();
   }
@@ -324,16 +329,21 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
           ? double.tryParse(_feeCtrl.text.replaceAll(',', '.'))
           : null;
 
+      final goalkeeperFee = (_paymentMode == 0 && _goalkeeperFeeCtrl.text.isNotEmpty)
+          ? double.tryParse(_goalkeeperFeeCtrl.text.replaceAll(',', '.'))
+          : null;
+
       await ds.updateGroupSettings(
         widget.groupId,
-        minPlayers:         min,
-        maxPlayers:         max,
-        defaultPlaceName:   place,
-        defaultDayOfWeek:   _dayOfWeek,
-        defaultKickoffTime: kickoff,
-        paymentMode:        _paymentMode,
-        monthlyFee:         fee,
-        goalIcon:           _icons['goalIcon'],
+        minPlayers:          min,
+        maxPlayers:          max,
+        defaultPlaceName:    place,
+        defaultDayOfWeek:    _dayOfWeek,
+        defaultKickoffTime:  kickoff,
+        paymentMode:         _paymentMode,
+        monthlyFee:          fee,
+        goalkeeperMonthlyFee: goalkeeperFee,
+        goalIcon:            _icons['goalIcon'],
         goalkeeperIcon:     _icons['goalkeeperIcon'],
         assistIcon:         _icons['assistIcon'],
         ownGoalIcon:        _icons['ownGoalIcon'],
@@ -662,9 +672,17 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
             if (_paymentMode == 0) ...[
               const SizedBox(height: 12),
               _labeledInput(
-                label: 'Mensalidade (R\$)',
+                label: 'Mensalidade Jogador (R\$)',
                 ctrl: _feeCtrl,
                 hint: 'Ex: 50.00',
+                isDark: isDark,
+                type: const TextInputType.numberWithOptions(decimal: true),
+              ),
+              const SizedBox(height: 8),
+              _labeledInput(
+                label: 'Mensalidade Goleiro (R\$)',
+                ctrl: _goalkeeperFeeCtrl,
+                hint: 'Padrão: igual ao jogador',
                 isDark: isDark,
                 type: const TextInputType.numberWithOptions(decimal: true),
               ),

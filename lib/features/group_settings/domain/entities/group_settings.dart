@@ -160,8 +160,9 @@ class GroupSettings {
   final String? defaultKickoffTime; // "HH:mm:ss" from API; display as "HH:mm"
 
   // Payment
-  final int     paymentMode;  // 0 = Monthly, 1 = PerGame
-  final double? monthlyFee;
+  final int     paymentMode;          // 0 = Monthly, 1 = PerGame
+  final double? monthlyFee;           // mensalidade para jogadores de linha
+  final double? goalkeeperMonthlyFee; // mensalidade para goleiros (null = igual à linha)
 
   // Icons — exact field names from the API
   final String? goalIcon;
@@ -186,8 +187,9 @@ class GroupSettings {
     this.defaultPlaceName,
     this.defaultDayOfWeek,
     this.defaultKickoffTime,
-    this.paymentMode       = 0,
+    this.paymentMode            = 0,
     this.monthlyFee,
+    this.goalkeeperMonthlyFee,
     this.goalIcon,
     this.goalkeeperIcon,
     this.assistIcon,
@@ -214,9 +216,10 @@ class GroupSettings {
       defaultPlaceName:   j['defaultPlaceName']         as String?,
       defaultDayOfWeek:   j['defaultDayOfWeek']         as int?,
       defaultKickoffTime: j['defaultKickoffTime']       as String?,
-      paymentMode:        (j['paymentMode'] as int?)    ?? 0,
-      monthlyFee:         (j['monthlyFee']  as num?)?.toDouble(),
-      goalIcon:           j['goalIcon']                 as String?,
+      paymentMode:           (j['paymentMode']          as int?)  ?? 0,
+      monthlyFee:            (j['monthlyFee']            as num?)?.toDouble(),
+      goalkeeperMonthlyFee:  (j['goalkeeperMonthlyFee']  as num?)?.toDouble(),
+      goalIcon:              j['goalIcon']               as String?,
       goalkeeperIcon:     j['goalkeeperIcon']           as String?,
       assistIcon:         j['assistIcon']               as String?,
       ownGoalIcon:        j['ownGoalIcon']              as String?,
@@ -238,6 +241,7 @@ class GroupSettings {
     required String? defaultKickoffTime, // already "HH:mm:ss"
     required int     paymentMode,
     required double? monthlyFee,
+    required double? goalkeeperMonthlyFee,
     required String? goalIcon,
     required String? goalkeeperIcon,
     required String? assistIcon,
@@ -260,9 +264,10 @@ class GroupSettings {
         'ownGoalIcon':        ownGoalIcon,
         'mvpIcon':            mvpIcon,
         'playerIcon':         playerIcon,
-        'paymentMode':        paymentMode,
-        // monthlyFee only sent when Monthly mode (matches site behaviour)
-        'monthlyFee': paymentMode == 0 ? monthlyFee : null,
+        'paymentMode':           paymentMode,
+        // fees only sent when Monthly mode
+        'monthlyFee':            paymentMode == 0 ? monthlyFee : null,
+        'goalkeeperMonthlyFee':  paymentMode == 0 ? goalkeeperMonthlyFee : null,
         'mvpTieRule':         mvpTieRule,
         // mvpTieMaxPlayers only sent when rule == 2 (mirrors site behaviour)
         'mvpTieMaxPlayers': mvpTieRule == 2 ? mvpTieMaxPlayers : null,

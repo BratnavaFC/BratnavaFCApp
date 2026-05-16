@@ -43,39 +43,45 @@ class PlayerRow {
   final List<MonthlyCell> months;
   /// 1–5 star evaluation (guestStarRating field from the player record).
   final int?           starRating;
+  final bool           isGoalkeeper;
 
   const PlayerRow({
     required this.playerId,
     required this.playerName,
     required this.months,
     this.starRating,
+    this.isGoalkeeper = false,
   });
 
   factory PlayerRow.fromJson(Map<String, dynamic> j) => PlayerRow(
-    playerId:   j['playerId']   as String,
-    playerName: j['playerName'] as String,
+    playerId:     j['playerId']     as String,
+    playerName:   j['playerName']   as String,
     months: (j['months'] as List? ?? [])
         .map((e) => MonthlyCell.fromJson(e as Map<String, dynamic>))
         .toList(),
-    starRating: j['guestStarRating'] as int? ?? j['starRating'] as int?,
+    starRating:   j['guestStarRating'] as int? ?? j['starRating'] as int?,
+    isGoalkeeper: j['isGoalkeeper']    as bool? ?? false,
   );
 }
 
 class MonthlyGrid {
   final int            year;
   final double?        monthlyFee;
+  final double?        goalkeeperMonthlyFee;
   final List<PlayerRow> players;
 
   const MonthlyGrid({
     required this.year,
     this.monthlyFee,
+    this.goalkeeperMonthlyFee,
     required this.players,
   });
 
   factory MonthlyGrid.fromJson(Map<String, dynamic> j) => MonthlyGrid(
-    year:       j['year']       as int,
-    monthlyFee: (j['monthlyFee'] as num?)?.toDouble(),
-    players:    (j['players'] as List? ?? [])
+    year:                 j['year']                as int,
+    monthlyFee:           (j['monthlyFee']          as num?)?.toDouble(),
+    goalkeeperMonthlyFee: (j['goalkeeperMonthlyFee'] as num?)?.toDouble(),
+    players:              (j['players'] as List? ?? [])
         .map((e) => PlayerRow.fromJson(e as Map<String, dynamic>))
         .toList(),
   );

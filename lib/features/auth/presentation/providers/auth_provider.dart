@@ -126,6 +126,26 @@ class AuthNotifier extends AsyncNotifier<void> {
     ref.invalidateSelf();
   }
 
+  /// Consulta o backend especificamente para [groupId] e atualiza
+  /// [activeGroupIsAdmin] / [activeGroupIsFinanceiro] na conta ativa.
+  /// Chamado toda vez que o usuário troca de patota.
+  Future<void> refreshMyGroupRoles(String groupId) async {
+    final account = ref.read(accountStoreProvider).activeAccount;
+    if (account == null) return;
+    try {
+      final dataSource = ref.read(_authDataSourceProvider);
+      final roles = await dataSource.fetchMyGroupRoles(groupId);
+      await ref.read(accountStoreProvider.notifier).upsertAccount(
+        account.copyWith(
+          activeGroupIsAdmin:      roles.isAdmin,
+          activeGroupIsFinanceiro: roles.isFinanceiro,
+        ),
+      );
+    } catch (_) {
+      // silencioso — UI já usa os arrays de fallback
+    }
+  }
+
   /// Re-busca os groupAdminIds e groupFinanceiroIds da conta ativa.
   /// Chamado no startup e no resume para refletir mudanças de role feitas
   /// enquanto o usuário estava fora (ex: foi promovido a admin).

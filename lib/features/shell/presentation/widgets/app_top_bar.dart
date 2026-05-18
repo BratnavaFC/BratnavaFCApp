@@ -600,11 +600,14 @@ class _UserMenuButton extends ConsumerWidget {
         onPlayerSwitch: (player) {
           ref.read(accountStoreProvider.notifier).patchActive(
             (a) => a.copyWith(
-              activePlayerId: player.playerId,
-              activeGroupId:  player.groupId,
+              activePlayerId:          player.playerId,
+              activeGroupId:           player.groupId,
+              activeGroupIsAdmin:      false,
+              activeGroupIsFinanceiro: false,
             ),
           );
           ref.read(activePlayerIdProvider.notifier).state = player.playerId;
+          ref.read(authNotifierProvider.notifier).refreshMyGroupRoles(player.groupId);
           context.go('/app');
         },
         onAddAccount: () {

@@ -16,6 +16,8 @@ class ApiConstants {
       '/api/Groups/admin/$adminId';
   static String groupsByFinanceiro(String finId) =>
       '/api/Groups/financeiro/$finId';
+  static String myGroupRoles(String groupId) =>
+      '/api/Groups/$groupId/my-roles';
 
   // Players
   static const String playersMe = '/api/Players/mine';

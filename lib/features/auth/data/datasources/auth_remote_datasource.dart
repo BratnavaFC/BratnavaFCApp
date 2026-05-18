@@ -122,6 +122,17 @@ class AuthRemoteDataSource {
     }
   }
 
+  /// Verifica se o usuário logado é admin e/ou financeiro de um grupo específico.
+  Future<({bool isAdmin, bool isFinanceiro})> fetchMyGroupRoles(String groupId) async {
+    try {
+      final res  = await _dio.get(ApiConstants.myGroupRoles(groupId));
+      final data = (res.data as Map<String, dynamic>?)?['data'] as Map<String, dynamic>? ?? {};
+      return (isAdmin: data['isAdmin'] == true, isFinanceiro: data['isFinanceiro'] == true);
+    } catch (_) {
+      return (isAdmin: false, isFinanceiro: false);
+    }
+  }
+
   /// Retorna os groupIds distintos dos jogadores do usuário logado.
   Future<List<String>> fetchMyGroupIds() async {
     try {

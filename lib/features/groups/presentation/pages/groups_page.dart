@@ -206,6 +206,8 @@ class _GroupsPageState extends ConsumerState<GroupsPage> {
   }
 
   List<Map<String, String>> get _myGroups {
+    final activeGroupId =
+        ref.read(accountStoreProvider).activeAccount?.activeGroupId;
     final seen = <String>{};
     final result = <Map<String, String>>[];
     for (final p in _myPlayers) {
@@ -221,7 +223,9 @@ class _GroupsPageState extends ConsumerState<GroupsPage> {
         result.add(g);
       }
     }
-    return result;
+    // Mostra apenas a patota ativa (selecionada na topbar)
+    if (activeGroupId == null) return result;
+    return result.where((g) => g['groupId'] == activeGroupId).toList();
   }
 
   _MyPlayerItem? get _myPlayerInExpanded =>
@@ -240,7 +244,7 @@ class _GroupsPageState extends ConsumerState<GroupsPage> {
   bool _isGroupFinanceiro(String groupId) {
     final account = ref.read(accountStoreProvider).activeAccount;
     if (account == null) return false;
-    return account.isAdmin || account.isGroupFinanceiro(groupId);
+    return account.isGroupFinanceiro(groupId);
   }
 
   Future<void> _loadPaymentData(String groupId) async {
@@ -547,6 +551,8 @@ class _GroupsPageState extends ConsumerState<GroupsPage> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    // Garante rebuild quando activeGroupId muda (troca de patota na topbar)
+    ref.watch(accountStoreProvider);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),

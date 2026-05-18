@@ -35,8 +35,21 @@ class Account extends Equatable {
 
   bool get isAdmin    => roles.any((r) => r.toLowerCase() == 'admin');
 
-  bool isGroupAdmin(String groupId)       => groupAdminIds.contains(groupId);
-  bool isGroupFinanceiro(String groupId)  => groupFinanceiroIds.contains(groupId);
+  /// Retorna true se o usuário é admin desta patota.
+  /// Para a patota ativa, usa o flag confirmado pelo backend (activeGroupIsAdmin)
+  /// como fonte primária; cai no array (populado no login) como fallback.
+  bool isGroupAdmin(String groupId) {
+    if (groupId == activeGroupId && (activeGroupIsAdmin ?? false)) return true;
+    return groupAdminIds.contains(groupId);
+  }
+
+  /// Retorna true se o usuário é financeiro desta patota.
+  /// Para a patota ativa, usa o flag confirmado pelo backend (activeGroupIsFinanceiro)
+  /// como fonte primária; cai no array (populado no login) como fallback.
+  bool isGroupFinanceiro(String groupId) {
+    if (groupId == activeGroupId && (activeGroupIsFinanceiro ?? false)) return true;
+    return groupFinanceiroIds.contains(groupId);
+  }
 
   // Checks para a patota ATIVA — mais seguros que os de array pois vêm do backend
   // no momento da troca. Usam os arrays como fallback enquanto a resposta não chega.

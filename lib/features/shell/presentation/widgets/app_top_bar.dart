@@ -31,20 +31,31 @@ class AppTopBar extends ConsumerWidget implements PreferredSizeWidget {
 
     // Bootstrap: igual ao site — quando players carregam e o account não tem
     // activePlayerId/activeGroupId, persiste o primeiro player automaticamente.
+    // Também atualiza activeGroupIsAdmin/Financeiro na inicialização, para que
+    // os menus de admin apareçam corretamente sem precisar trocar de patota.
     ref.listen(myPlayersProvider, (_, next) {
       next.whenData((list) {
         if (list.isEmpty) return;
         final acc = ref.read(accountStoreProvider).activeAccount;
         if (acc == null) return;
-        if (acc.activePlayerId != null && acc.activeGroupId != null) return;
 
-        final first = list.first;
-        ref.read(accountStoreProvider.notifier).patchActive(
-          (a) => a.copyWith(
-            activePlayerId: a.activePlayerId ?? first.playerId,
-            activeGroupId:  a.activeGroupId  ?? first.groupId,
-          ),
-        );
+        String? groupId = acc.activeGroupId;
+
+        if (acc.activePlayerId == null || acc.activeGroupId == null) {
+          final first = list.first;
+          groupId = acc.activeGroupId ?? first.groupId;
+          ref.read(accountStoreProvider.notifier).patchActive(
+            (a) => a.copyWith(
+              activePlayerId: a.activePlayerId ?? first.playerId,
+              activeGroupId:  a.activeGroupId  ?? first.groupId,
+            ),
+          );
+        }
+
+        // Refresh roles do grupo ativo (cobre login inicial + retorno ao app)
+        if (groupId != null) {
+          ref.read(authNotifierProvider.notifier).refreshMyGroupRoles(groupId);
+        }
       });
     });
 

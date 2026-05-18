@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/errors/app_exception.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../auth/presentation/providers/account_store.dart';
 import '../../domain/entities/spotlight_report.dart';
@@ -59,7 +60,7 @@ class _PlayerSpotlightPageState extends ConsumerState<PlayerSpotlightPage> {
                   }
                 });
                 return SliverToBoxAdapter(
-                  child: _ErrorState(message: e.toString()),
+                  child: _ErrorState(message: extractDioError(e)),
                 );
               },
               data: (report) {

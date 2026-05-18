@@ -507,7 +507,7 @@ class _AdminMonthlyViewState extends State<_AdminMonthlyView> {
             padding: EdgeInsets.all(40),
             child: CircularProgressIndicator(),
           )),
-          error: (e, _) => _ErrorState(e.toString(), isDark: widget.isDark),
+          error: (e, _) => _ErrorState(extractDioError(e), isDark: widget.isDark),
           data: (grid) {
             if (grid.players.isEmpty) {
               return _EmptyState(
@@ -572,7 +572,7 @@ class _UserMonthlyView extends StatelessWidget {
         rowAsync.when(
           loading: () => const Center(child: Padding(
             padding: EdgeInsets.all(40), child: CircularProgressIndicator())),
-          error: (e, _) => _ErrorState(e.toString(), isDark: isDark),
+          error: (e, _) => _ErrorState(extractDioError(e), isDark: isDark),
           data: (row) {
             if (row == null) {
               return _EmptyState(
@@ -851,7 +851,7 @@ class _ExtraTab extends ConsumerWidget {
 
       return chargesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error:   (e, _) => _ErrorState(e.toString(), isDark: isDark),
+        error:   (e, _) => _ErrorState(extractDioError(e), isDark: isDark),
         data:    (charges) {
           final players = gridAsync.valueOrNull?.players ?? [];
           return _AdminExtraView(
@@ -875,7 +875,7 @@ class _ExtraTab extends ConsumerWidget {
       final chargesAsync = ref.watch(myExtraChargesProvider(groupId));
       return chargesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error:   (e, _) => _ErrorState(e.toString(), isDark: isDark),
+        error:   (e, _) => _ErrorState(extractDioError(e), isDark: isDark),
         data:    (charges) => _UserExtraView(
           charges:        charges,
           year:           year,

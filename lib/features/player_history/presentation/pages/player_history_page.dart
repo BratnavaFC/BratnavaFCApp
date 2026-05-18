@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../../../core/errors/app_exception.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/date_utils.dart';
 import '../../../auth/presentation/providers/account_store.dart';
@@ -344,7 +345,7 @@ class _PlayerHistoryPageState extends ConsumerState<PlayerHistoryPage> {
           }
         });
         return SliverToBoxAdapter(
-          child: _ErrorState(message: e.toString()),
+          child: _ErrorState(message: extractDioError(e)),
         );
       },
       data: (items) {

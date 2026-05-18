@@ -4,6 +4,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/date_utils.dart';
 import '../../domain/entities/bet_models.dart';
 import '../providers/bet_provider.dart';
+import '../../../../core/errors/app_exception.dart';
 
 class CurrentBetTab extends ConsumerStatefulWidget {
   final String groupId;
@@ -63,7 +64,7 @@ class _CurrentBetTabState extends ConsumerState<CurrentBetTab> {
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() { _loading = false; _error = e.toString(); });
+      setState(() { _loading = false; _error = extractDioError(e); });
     }
   }
 

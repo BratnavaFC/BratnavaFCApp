@@ -4,6 +4,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/date_utils.dart';
 import '../../domain/entities/bet_models.dart';
 import '../providers/bet_provider.dart';
+import '../../../../core/errors/app_exception.dart';
 
 class BetHistoryTab extends ConsumerStatefulWidget {
   final String groupId;
@@ -38,7 +39,7 @@ class _BetHistoryTabState extends ConsumerState<BetHistoryTab>
       setState(() { _history = h; _loading = false; });
     } catch (e) {
       if (!mounted) return;
-      setState(() { _error = e.toString(); _loading = false; });
+      setState(() { _error = extractDioError(e); _loading = false; });
     }
   }
 

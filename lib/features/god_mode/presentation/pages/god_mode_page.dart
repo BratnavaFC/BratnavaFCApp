@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/errors/app_exception.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/date_utils.dart';
 import '../../../auth/presentation/providers/account_store.dart';
@@ -423,7 +424,7 @@ class _UsersTabState extends ConsumerState<_UsersTab> {
           child: usersAsync.when(
             loading: () =>
                 const Center(child: CircularProgressIndicator()),
-            error: (e, _) => _ErrorState(e.toString(), isDark: isDark),
+            error: (e, _) => _ErrorState(extractDioError(e), isDark: isDark),
             data: (paged) {
               if (paged.items.isEmpty) {
                 return _EmptyState(
@@ -702,7 +703,7 @@ class _GroupsTabState extends ConsumerState<_GroupsTab> {
 
     return groupsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => _ErrorState(e.toString(), isDark: isDark),
+      error: (e, _) => _ErrorState(extractDioError(e), isDark: isDark),
       data: (groups) {
         if (groups.isEmpty) {
           return _EmptyState(

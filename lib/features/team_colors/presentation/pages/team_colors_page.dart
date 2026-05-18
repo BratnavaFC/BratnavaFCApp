@@ -95,9 +95,7 @@ class _TeamColorsPageState extends ConsumerState<TeamColorsPage> {
                     ref.invalidate(teamColorsProvider(groupId));
                   } catch (e) {
                     if (context.mounted) {
-                      final msg = e is Exception
-                          ? e.toString().replaceFirst('Exception: ', '')
-                          : extractDioError(e);
+                      final msg = extractDioError(e);
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text(msg)),
                       );

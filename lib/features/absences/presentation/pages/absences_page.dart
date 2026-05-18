@@ -136,7 +136,7 @@ class _AbsencesPageState extends ConsumerState<AbsencesPage> {
             async.when(
               loading: () => const SliverToBoxAdapter(child: _SkeletonList()),
               error:   (e, _) => SliverToBoxAdapter(
-                child: _ErrorState(message: e.toString())),
+                child: _ErrorState(message: extractDioError(e))),
               data: (absences) => absences.isEmpty
                   ? SliverToBoxAdapter(
                       child: _EmptyState(onAddTap: _openCreate))

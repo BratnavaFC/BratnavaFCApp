@@ -10,6 +10,7 @@ import '../../../groups/presentation/providers/group_invites_provider.dart';
 import '../../../groups/domain/entities/group_invite.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../dashboard/presentation/providers/dashboard_provider.dart';
+import '../../../../core/errors/app_exception.dart';
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
@@ -164,7 +165,7 @@ class _AdminUsersPageState extends ConsumerState<_AdminUsersPage> {
             ),
             error: (e, _) => SliverFillRemaining(
               child: _ErrorState(
-                message: e.toString(),
+                message: extractDioError(e, 'Não foi possível carregar usuários.'),
                 onRetry: () => ref.invalidate(usersProvider),
               ),
             ),
@@ -1141,7 +1142,7 @@ class _UserDetailSheetState extends ConsumerState<_UserDetailSheet> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString()),
+            content: Text(extractDioError(e, 'Ocorreu um erro inesperado.')),
             backgroundColor: AppColors.rose600,
             behavior: SnackBarBehavior.floating,
           ),
@@ -1202,7 +1203,7 @@ class _UserDetailSheetState extends ConsumerState<_UserDetailSheet> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString()),
+            content: Text(extractDioError(e, 'Ocorreu um erro inesperado.')),
             backgroundColor: AppColors.rose600,
             behavior: SnackBarBehavior.floating,
           ),
@@ -1663,7 +1664,7 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString()),
+            content: Text(extractDioError(e, 'Ocorreu um erro inesperado.')),
             backgroundColor: AppColors.rose600,
             behavior: SnackBarBehavior.floating,
           ),
@@ -1960,9 +1961,10 @@ class _ChangePasswordSheetState
       }
     } catch (e) {
       if (mounted) {
+        final msg = extractDioError(e, 'Não foi possível alterar a senha.');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString()),
+            content: Text(msg),
             backgroundColor: AppColors.rose600,
             behavior: SnackBarBehavior.floating,
           ),

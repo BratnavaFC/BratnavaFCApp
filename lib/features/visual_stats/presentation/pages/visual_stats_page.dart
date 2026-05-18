@@ -1,6 +1,7 @@
 import 'dart:math' show min;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/errors/app_exception.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/presentation/widgets/group_icon_renderer.dart';
 import '../../../auth/presentation/providers/account_store.dart';
@@ -154,7 +155,7 @@ class _VisualStatsPageState extends ConsumerState<VisualStatsPage> {
             // ── Content ──────────────────────────────────────────────────
             async.when(
               loading: () => const SliverToBoxAdapter(child: _SkeletonList()),
-              error:   (e, _) => SliverToBoxAdapter(child: _ErrorState(message: e.toString())),
+              error:   (e, _) => SliverToBoxAdapter(child: _ErrorState(message: extractDioError(e))),
               data:    (report) {
                 final sorted = _sorted(report.players);
                 return SliverToBoxAdapter(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/errors/app_exception.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../auth/presentation/providers/account_store.dart';
 import '../../domain/entities/birthday_status.dart';
@@ -53,7 +54,7 @@ class BirthdayPage extends ConsumerWidget {
             ),
             async.when(
               loading: () => const SliverToBoxAdapter(child: _SkeletonList()),
-              error:   (e, _) => SliverToBoxAdapter(child: _ErrorState(message: e.toString())),
+              error:   (e, _) => SliverToBoxAdapter(child: _ErrorState(message: extractDioError(e))),
               data:    (players) => _BirthdayContent(players: players),
             ),
             const SliverToBoxAdapter(child: SizedBox(height: 40)),

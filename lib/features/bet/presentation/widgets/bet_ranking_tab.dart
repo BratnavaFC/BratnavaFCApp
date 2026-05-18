@@ -4,6 +4,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../auth/presentation/providers/account_store.dart';
 import '../../domain/entities/bet_models.dart';
 import '../providers/bet_provider.dart';
+import '../../../../core/errors/app_exception.dart';
 
 class BetRankingTab extends ConsumerStatefulWidget {
   final String groupId;
@@ -46,7 +47,7 @@ class _BetRankingTabState extends ConsumerState<BetRankingTab>
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() { _error = e.toString(); _loading = false; });
+      setState(() { _error = extractDioError(e); _loading = false; });
     }
   }
 

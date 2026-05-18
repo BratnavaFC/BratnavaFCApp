@@ -197,7 +197,7 @@ class _GroupSettingsPageWrapperState extends ConsumerState<GroupSettingsPage> {
           body: Center(child: CircularProgressIndicator())),
       error: (e, _) => Scaffold(
         body: _ErrorState(
-          message: e.toString(),
+          message: extractDioError(e, 'Não foi possível carregar as configurações.'),
           onRetry: () => ref.invalidate(groupSettingsProvider(groupId)),
         ),
       ),

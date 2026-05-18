@@ -5,6 +5,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/presentation/widgets/app_button.dart';
 import '../../../../shared/presentation/widgets/app_text_field.dart';
 import '../providers/auth_provider.dart';
+import '../../../../core/errors/app_exception.dart';
 
 class RegisterPage extends ConsumerStatefulWidget {
   final bool addMode;
@@ -50,7 +51,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
 
     final state = ref.read(authNotifierProvider);
     state.whenOrNull(
-      error: (e, _) => _showError(e.toString()),
+      error: (e, _) => _showError(extractDioError(e, 'Não foi possível criar a conta.')),
       data: (_) async {
         setState(() => _success = true);
         await Future.delayed(const Duration(milliseconds: 600));

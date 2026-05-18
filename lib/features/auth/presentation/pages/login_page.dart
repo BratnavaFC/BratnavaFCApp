@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/errors/app_exception.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/presentation/widgets/app_button.dart';
 import '../../../../shared/presentation/widgets/app_text_field.dart';
@@ -42,7 +43,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
     final state = ref.read(authNotifierProvider);
     state.whenOrNull(
-      error: (e, _) => _showError(e.toString()),
+      error: (e, _) => _showError(extractDioError(e, 'Usuário ou senha incorretos.')),
       data:  (_)    => context.go('/app'),
     );
   }

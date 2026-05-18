@@ -9,6 +9,7 @@ import '../providers/dashboard_provider.dart';
 import '../widgets/current_match_card.dart';
 import '../widgets/recent_match_card.dart';
 import '../../../payments/presentation/providers/payments_provider.dart';
+import '../../../../core/errors/app_exception.dart';
 
 class DashboardPage extends ConsumerStatefulWidget {
   const DashboardPage({super.key});
@@ -288,7 +289,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       loading: () => Column(
         children: List.generate(3, (_) => const _Skeleton(height: 76, bottom: 8)),
       ),
-      error: (e, _) => _CenteredMsg(msg: e.toString(), isDark: isDark),
+      error: (e, _) => _CenteredMsg(msg: extractDioError(e, 'Não foi possível carregar as partidas.'), isDark: isDark),
       data: (matches) {
         if (matches.isEmpty) {
           return _DashedEmpty(

@@ -394,10 +394,7 @@ class MatchNotifier extends StateNotifier<MatchState> {
       await _ds.setColors(groupId, matchId, teamAColorId, teamBColorId);
       await refresh();
     } catch (e) {
-      final fallback = e is Exception
-          ? e.toString().replaceFirst('Exception: ', '')
-          : 'Falha ao definir cores.';
-      state = state.copyWith(error: extractDioError(e, fallback));
+      state = state.copyWith(error: extractDioError(e, 'Falha ao definir cores.'));
     } finally {
       state = state.copyWith(mutating: false);
     }

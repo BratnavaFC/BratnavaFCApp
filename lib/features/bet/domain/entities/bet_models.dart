@@ -114,6 +114,32 @@ class MatchBetDto {
   }
 }
 
+// ── BettableMatchDto ─────────────────────────────────────────────────────────
+
+class BettableMatchDto {
+  final String matchId;
+  final String placeName;
+  final DateTime playedAt;
+
+  const BettableMatchDto({
+    required this.matchId,
+    required this.placeName,
+    required this.playedAt,
+  });
+
+  factory BettableMatchDto.fromJson(Map<String, dynamic> j) => BettableMatchDto(
+    matchId:   (j['matchId']   ?? j['MatchId']   ?? '').toString(),
+    placeName: (j['placeName'] ?? j['PlaceName'] ?? '').toString(),
+    playedAt:  _parseBetDate((j['playedAt'] ?? j['PlayedAt'])?.toString()),
+  );
+}
+
+DateTime _parseBetDate(String? s) {
+  if (s == null || s.isEmpty) return DateTime.now();
+  final utc = (s.endsWith('Z') || s.contains('+')) ? s : '${s}Z';
+  return DateTime.tryParse(utc)?.toLocal() ?? DateTime.now();
+}
+
 // ── CurrentMatchBetContext ────────────────────────────────────────────────────
 
 class CurrentMatchBetContext {

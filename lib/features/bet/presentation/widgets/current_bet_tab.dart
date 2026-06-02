@@ -15,6 +15,8 @@ class CurrentBetTab extends ConsumerStatefulWidget {
 }
 
 class _CurrentBetTabState extends ConsumerState<CurrentBetTab> {
+  List<BettableMatchDto>  _bettable         = [];
+  int                     _selectedIdx      = 0;
   CurrentMatchBetContext? _ctx;
   int?                    _balance;
   bool                    _loading          = true;
@@ -42,29 +44,63 @@ class _CurrentBetTabState extends ConsumerState<CurrentBetTab> {
 
     final ds = ref.read(betDsProvider);
     try {
+      // Carrega lista de partidas disponíveis + saldo em paralelo
       final results = await Future.wait([
-        ds.fetchCurrent(widget.groupId),
+        ds.fetchBettableMatches(widget.groupId),
         ds.fetchBalance(widget.groupId),
       ]);
       if (!mounted) return;
-      final ctx     = results[0] as CurrentMatchBetContext?;
-      final balance = (results[1] as int?) ?? 0;
+
+      final bettable = results[0] as List<BettableMatchDto>;
+      final balance  = (results[1] as int?) ?? 0;
+
+      // Carrega contexto da partida selecionada
+      CurrentMatchBetContext? ctx;
+      if (bettable.isNotEmpty) {
+        final idx = _selectedIdx.clamp(0, bettable.length - 1);
+        ctx = await ds.fetchContextForMatch(
+            widget.groupId, bettable[idx].matchId);
+      } else {
+        // Fallback: endpoint legado
+        ctx = await ds.fetchCurrent(widget.groupId);
+      }
+      if (!mounted) return;
+
       setState(() {
-        _loading = false;
-        _ctx     = ctx;
-        _balance = balance;
-        if (ctx?.myBet?.selections.isNotEmpty == true) {
-          _selections = ctx!.myBet!.selections.map(_fromDto).toList();
-        } else if (ctx?.myBet == null) {
-          // Reset to default when no existing bet
-          _selections = const [
-            SelectionFormState(category: 'WinningTeam', fichasWagered: 50),
-          ];
-        }
+        _loading     = false;
+        _bettable    = bettable;
+        _ctx         = ctx;
+        _balance     = balance;
+        _applyCtx(ctx);
       });
     } catch (e) {
       if (!mounted) return;
       setState(() { _loading = false; _error = extractDioError(e); });
+    }
+  }
+
+  Future<void> _selectMatch(int idx) async {
+    if (idx == _selectedIdx && _ctx != null) return;
+    setState(() { _loading = true; _selectedIdx = idx; _error = null; });
+    final ds = ref.read(betDsProvider);
+    try {
+      final ctx = await ds.fetchContextForMatch(
+          widget.groupId, _bettable[idx].matchId);
+      if (!mounted) return;
+      setState(() { _loading = false; _ctx = ctx; _applyCtx(ctx); });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { _loading = false; _error = extractDioError(e); });
+    }
+  }
+
+  void _applyCtx(CurrentMatchBetContext? ctx) {
+    if (ctx?.myBet?.selections.isNotEmpty == true) {
+      _selections = ctx!.myBet!.selections.map(_fromDto).toList();
+    } else if (ctx?.myBet == null) {
+      _selections = const [
+        SelectionFormState(category: 'WinningTeam', fichasWagered: 50),
+      ];
     }
   }
 
@@ -243,7 +279,7 @@ class _CurrentBetTabState extends ConsumerState<CurrentBetTab> {
       return _EmptyMatchState(isDark: isDark);
     }
 
-    final isLocked    = !ctx.betWindowOpen;
+    final isLocked = !ctx.betWindowOpen;
     final totalWager  = _selections.fold(0, (s, sel) => s + sel.fichasWagered);
     final overMax     = totalWager > kMaxWager;
     final members     = ctx.players.where((p) => !p.isGuest).toList();
@@ -256,30 +292,43 @@ class _CurrentBetTabState extends ConsumerState<CurrentBetTab> {
     if (!usedCats.contains('FinalScore'))    availCats.add('FinalScore');
     if (_selections.length < 5)             availCats.addAll(['PlayerGoals', 'PlayerAssists']);
 
-    return RefreshIndicator(
+    return Column(
+      children: [
+        // ── Seletor de partidas (quando há mais de uma) ───────────────────
+        if (_bettable.length > 1)
+          _BetMatchSelector(
+            matches:  _bettable,
+            selected: _selectedIdx.clamp(0, _bettable.length - 1),
+            isDark:   isDark,
+            onSelect: _selectMatch,
+          ),
+
+        Expanded(child: RefreshIndicator(
       onRefresh: _load,
       child: ListView(
         padding: const EdgeInsets.all(16),
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
 
-          // ── Player status card ────────────────────────────────────────────
-          _PlayerStatusCard(
-            members:    members,
-            betCount:   betCount,
-            playedAt:   ctx.playedAt,
-            statusName: ctx.statusName,
-            balance:    _balance,
-            isExpanded: _showPlayerStatus,
-            onToggle:   () => setState(() => _showPlayerStatus = !_showPlayerStatus),
-            isDark:     isDark,
-            onRefresh:  _load,
-          ),
-          const SizedBox(height: 12),
-
-          // ── Window closed warning ─────────────────────────────────────────
+          // ── Janela de apostas fechada ─────────────────────────────────────
           if (isLocked) ...[
-            _LockedBanner(isDark: isDark),
+            _BetClosedBanner(statusName: ctx.statusName, isDark: isDark),
+            const SizedBox(height: 16),
+          ],
+
+          // ── Player status card (só quando apostas disponíveis) ────────────
+          if (!isLocked) ...[
+            _PlayerStatusCard(
+              members:    members,
+              betCount:   betCount,
+              playedAt:   ctx.playedAt,
+              statusName: ctx.statusName,
+              balance:    _balance,
+              isExpanded: _showPlayerStatus,
+              onToggle:   () => setState(() => _showPlayerStatus = !_showPlayerStatus),
+              isDark:     isDark,
+              onRefresh:  _load,
+            ),
             const SizedBox(height: 12),
           ],
 
@@ -399,6 +448,75 @@ class _CurrentBetTabState extends ConsumerState<CurrentBetTab> {
             const SizedBox(height: 24),
           ],
         ],
+      ),
+    )),
+      ],
+    );
+  }
+}
+
+// ── Seletor de partidas para apostas ─────────────────────────────────────────
+
+class _BetMatchSelector extends StatelessWidget {
+  final List<BettableMatchDto> matches;
+  final int selected;
+  final bool isDark;
+  final void Function(int) onSelect;
+
+  const _BetMatchSelector({
+    required this.matches,
+    required this.selected,
+    required this.isDark,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: isDark ? AppColors.slate800 : AppColors.slate100,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          children: List.generate(matches.length, (i) {
+            final m      = matches[i];
+            final active = i == selected;
+            final d      = m.playedAt;
+            final label  = '${d.day.toString().padLeft(2,'0')}/'
+                           '${d.month.toString().padLeft(2,'0')} · '
+                           '${m.placeName.isNotEmpty ? m.placeName : 'Partida'}';
+            return GestureDetector(
+              onTap: () => onSelect(i),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                margin: const EdgeInsets.only(right: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                decoration: BoxDecoration(
+                  color: active
+                      ? (isDark ? Colors.white : AppColors.slate900)
+                      : (isDark ? AppColors.slate700 : Colors.white),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: active
+                        ? Colors.transparent
+                        : (isDark ? AppColors.slate600 : AppColors.slate200),
+                  ),
+                ),
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: active
+                        ? (isDark ? AppColors.slate900 : Colors.white)
+                        : (isDark ? AppColors.slate300 : AppColors.slate600),
+                  ),
+                ),
+              ),
+            );
+          }),
+        ),
       ),
     );
   }
@@ -963,39 +1081,73 @@ class _SmallBtn extends StatelessWidget {
   }
 }
 
-// ── Locked banner ─────────────────────────────────────────────────────────────
+// ── Bet closed banner ─────────────────────────────────────────────────────────
 
-class _LockedBanner extends StatelessWidget {
-  final bool isDark;
-  const _LockedBanner({required this.isDark});
+class _BetClosedBanner extends StatelessWidget {
+  final String statusName;
+  final bool   isDark;
+  const _BetClosedBanner({required this.statusName, required this.isDark});
+
+  String get _reason {
+    final s = statusName.toLowerCase();
+    if (s == 'acceptation') {
+      return 'As apostas abrem quando o Matchmaking começar.';
+    }
+    if (s == 'matchmaking') {
+      return 'Aguardando a formação dos times.';
+    }
+    if (s == 'started') {
+      return 'A partida já foi iniciada. As apostas estão encerradas.';
+    }
+    if (s == 'ended' || s == 'postgame' || s == 'finalized') {
+      return 'A partida encerrou. As apostas estão fechadas.';
+    }
+    return 'Apostas não disponíveis nesta etapa.';
+  }
+
+  bool get _isMatchMaking => statusName.toLowerCase() == 'matchmaking';
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(12),
+    padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
-      color:        isDark
-          ? const Color(0xFF78350F).withValues(alpha: .2)
-          : const Color(0xFFFEF3C7),
+      color: _isMatchMaking
+          ? (isDark ? const Color(0xFF78350F).withValues(alpha: .2) : const Color(0xFFFEF3C7))
+          : (isDark ? AppColors.slate800 : AppColors.slate50),
       borderRadius: BorderRadius.circular(12),
-      border:       Border.all(
-          color: isDark
-              ? const Color(0xFF92400E)
-              : const Color(0xFFFDE68A)),
+      border: Border.all(
+        color: _isMatchMaking
+            ? (isDark ? const Color(0xFF92400E) : const Color(0xFFFDE68A))
+            : (isDark ? AppColors.slate700 : AppColors.slate200),
+      ),
     ),
-    child: const Row(children: [
-      Icon(Icons.lock_outline, size: 16, color: Color(0xFFD97706)),
-      SizedBox(width: 8),
-      Expanded(child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Janela de apostas encerrada',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
-                  color: Color(0xFFD97706))),
-          Text('As apostas só podem ser feitas durante o matchmaking.',
-              style: TextStyle(fontSize: 10,
-                  color: Color(0xFFB45309))),
-        ],
-      )),
+    child: Row(children: [
+      Icon(Icons.lock_outline_rounded, size: 18,
+          color: _isMatchMaking ? const Color(0xFFD97706) : AppColors.slate400),
+      const SizedBox(width: 10),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Apostas indisponíveis',
+                style: TextStyle(
+                  fontSize:   13,
+                  fontWeight: FontWeight.w600,
+                  color: _isMatchMaking
+                      ? const Color(0xFFD97706)
+                      : (isDark ? AppColors.slate200 : AppColors.slate700),
+                )),
+            const SizedBox(height: 2),
+            Text(_reason,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: _isMatchMaking
+                      ? const Color(0xFFB45309)
+                      : (isDark ? AppColors.slate400 : AppColors.slate500),
+                )),
+          ],
+        ),
+      ),
     ]),
   );
 }

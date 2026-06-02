@@ -46,11 +46,25 @@ class MatchRemoteDataSource {
     return d != null ? MatchGroupSettings.fromJson(d) : null;
   }
 
-  // ── Partida atual ─────────────────────────────────────────────────────────
+  // ── Partida atual / lista de partidas ────────────────────────────────────
 
   /// Retorna {id, status, stepKey, placeName, playedAt} da partida ativa ou null se 404.
   Future<Map<String, dynamic>?> fetchCurrentMatchStub(String groupId) async {
     final res = await _dio.get(ApiConstants.currentMatch(groupId));
+    return _unwrapMap(res.data);
+  }
+
+  /// Retorna lista de partidas não-finalizadas (máx. 5) com MatchHeaderDto.
+  Future<List<MatchHeaderDto>> fetchUpcomingMatches(String groupId) async {
+    final res = await _dio.get(ApiConstants.upcomingMatches(groupId));
+    return _unwrapList(res.data)
+        .map((e) => MatchHeaderDto.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Retorna o detalhe completo de uma partida (jogadores, times, gols, MVP).
+  Future<Map<String, dynamic>?> fetchMatchDetails(String groupId, String matchId) async {
+    final res = await _dio.get(ApiConstants.matchDetails(groupId, matchId));
     return _unwrapMap(res.data);
   }
 
@@ -85,7 +99,11 @@ class MatchRemoteDataSource {
         .toList();
   }
 
-  // ── Criar partida ─────────────────────────────────────────────────────────
+  // ── Criar / excluir partida ───────────────────────────────────────────────
+
+  Future<void> deleteMatch(String groupId, String matchId) async {
+    await _dio.delete(ApiConstants.matchDelete(groupId, matchId));
+  }
 
   Future<void> createMatch(String groupId, String placeName, DateTime playedAt) async {
     await _dio.post(ApiConstants.matchCreate(groupId), data: {
@@ -320,5 +338,29 @@ class MatchRemoteDataSource {
     if (d is String) return d;
     if (d is Map) return d['image'] as String? ?? d['base64'] as String?;
     return null;
+  }
+
+  // ── No-show / DidNotPlay ──────────────────────────────────────────────────
+
+  /// Marca ou desmarca um jogador como "não foi jogar".
+  /// [didNotPlay] = true → ausente; false → desfaz.
+  Future<void> setNoShow(
+      String groupId, String matchId, String matchPlayerId, bool didNotPlay) async {
+    await _dio.patch(
+      ApiConstants.matchPlayerNoShow(groupId, matchId, matchPlayerId),
+      data: {'didNotPlay': didNotPlay},
+    );
+  }
+
+  // ── Vínculo Partida ↔ Votação ─────────────────────────────────────────────
+
+  /// Vincula ou desvincula uma votação/evento a esta partida.
+  /// [pollId] = null → desvincula.
+  Future<void> setLinkedPoll(
+      String groupId, String matchId, String? pollId) async {
+    await _dio.patch(
+      ApiConstants.matchLinkedPoll(groupId, matchId),
+      data: {'pollId': pollId},
+    );
   }
 }

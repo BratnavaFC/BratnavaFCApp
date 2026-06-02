@@ -1,29 +1,54 @@
-/// Utilities for parsing API dates safely.
-///
-/// The backend stores dates as local Brazil wall-clock time but marks them
-/// with 'Z'. Stripping the timezone marker and parsing as-is preserves the
-/// intended time regardless of the device's local timezone.
-class AppDateUtils {
-  AppDateUtils._();
+// Offset fixo de Brasília (UTC-3). Independe do fuso configurado no dispositivo,
+// o que evita o problema de emuladores/dispositivos em UTC exibirem +3h.
+const _kBrtOffset = Duration(hours: 3);
 
-  static DateTime? parse(String? s) {
-    if (s == null || s.isEmpty) return null;
-    return _parseDate(s);
-  }
-
-  /// Returns a non-nullable DateTime, falling back to [DateTime.now()].
-  static DateTime parseOrNow(String? s) => parse(s) ?? DateTime.now();
+/// Converte string ISO-8601 UTC → horário de Brasília (UTC-3).
+/// Retorna um DateTime "naive" (sem fuso) com os valores de hora/minuto já
+/// corretos para o Brasil, funcionando independente do fuso do dispositivo.
+DateTime _toBrt(DateTime utc) {
+  final brt = utc.toUtc().subtract(_kBrtOffset);
+  // DateTime sem flag isUtc → d.hour já devolve a hora brasileira em qualquer dispositivo
+  return DateTime(brt.year, brt.month, brt.day, brt.hour, brt.minute, brt.second, brt.millisecond);
 }
 
-/// Strips timezone suffix, parses as wall-clock time, then subtracts 3 hours
-/// to compensate for the backend always returning times 3 hours ahead (UTC vs UTC-3).
-/// Date-only strings (no time component) are returned as-is to avoid shifting
-/// the calendar date.
-DateTime _parseDate(String? s) {
-  if (s == null || s.isEmpty) return DateTime.now();
-  final bare = s.replaceFirst(RegExp(r'Z$|[+-]\d{2}:\d{2}$'), '');
-  final dt = DateTime.tryParse(bare) ?? DateTime.now();
-  // Only apply the UTC-3 correction when the string has a time component.
-  final hasTime = bare.contains('T') || (bare.contains(' ') && bare.contains(':'));
-  return hasTime ? dt.subtract(const Duration(hours: 3)) : dt;
+DateTime _utcParse(String? raw) {
+  if (raw == null || raw.isEmpty) return DateTime.now();
+  // Garante sufixo UTC para parsing correto
+  final s = (raw.endsWith('Z') || raw.contains('+') ||
+             RegExp(r'-\d{2}:\d{2}$').hasMatch(raw)) ? raw : '${raw}Z';
+  final utc = DateTime.tryParse(s);
+  return utc != null ? _toBrt(utc) : DateTime.now();
+}
+
+DateTime? _utcParseOrNull(String? raw) {
+  if (raw == null || raw.isEmpty) return null;
+  final s = (raw.endsWith('Z') || raw.contains('+') ||
+             RegExp(r'-\d{2}:\d{2}$').hasMatch(raw)) ? raw : '${raw}Z';
+  final utc = DateTime.tryParse(s);
+  return utc != null ? _toBrt(utc) : null;
+}
+
+// ── Top-level helpers (usados nos modelos mais recentes) ──────────────────────
+
+/// Parseia data da API garantindo interpretação UTC. Nunca retorna null.
+DateTime parseApiDate(String? raw, {DateTime? fallback}) =>
+    raw == null || raw.isEmpty
+        ? (fallback ?? DateTime.now())
+        : _utcParseOrNull(raw) ?? fallback ?? DateTime.now();
+
+/// Parseia data da API. Retorna null se a string for inválida.
+DateTime? parseApiDateOrNull(String? raw) => _utcParseOrNull(raw);
+
+// ── AppDateUtils — classe compatível com código legado ────────────────────────
+
+/// Classe utilitária de datas. Todos os métodos garantem parsing UTC correto,
+/// substituindo o hack anterior de `subtract(3h)`.
+class AppDateUtils {
+  const AppDateUtils._();
+
+  /// Parseia string ISO-8601. Nunca retorna null.
+  static DateTime parseOrNow(String? raw) => _utcParse(raw);
+
+  /// Parseia string ISO-8601. Retorna null se inválida.
+  static DateTime? parse(String? raw) => _utcParseOrNull(raw);
 }

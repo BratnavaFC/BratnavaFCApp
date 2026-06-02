@@ -46,6 +46,9 @@ class MatchPlayer {
   final String  playerName;
   final bool    isGoalkeeper;
   final bool    isMvp;
+  final bool    didNotPlay;
+  final String? absenceType;
+  final String? absenceDescription;
   final int     team; // 1 = A, 2 = B
 
   const MatchPlayer({
@@ -54,17 +57,23 @@ class MatchPlayer {
     required this.playerName,
     this.isGoalkeeper = false,
     this.isMvp = false,
+    this.didNotPlay = false,
+    this.absenceType,
+    this.absenceDescription,
     this.team = 0,
   });
 
   factory MatchPlayer.fromJson(Map<String, dynamic> j, {int team = 0}) =>
       MatchPlayer(
-        matchPlayerId: (j['matchPlayerId'] ?? '') as String,
-        playerId:      j['playerId'] as String?,
-        playerName:    (j['playerName'] ?? '') as String,
-        isGoalkeeper:  (j['isGoalkeeper'] as bool?) ?? false,
-        isMvp:         (j['isMvp'] as bool?) ?? false,
-        team:          team,
+        matchPlayerId:      (j['matchPlayerId'] ?? '') as String,
+        playerId:           j['playerId'] as String?,
+        playerName:         (j['playerName'] ?? '') as String,
+        isGoalkeeper:       (j['isGoalkeeper'] as bool?) ?? false,
+        isMvp:              (j['isMvp'] as bool?) ?? false,
+        didNotPlay:         (j['didNotPlay'] as bool?) ?? false,
+        absenceType:        j['absenceType'] as String?,
+        absenceDescription: j['absenceDescription'] as String?,
+        team:               team,
       );
 }
 

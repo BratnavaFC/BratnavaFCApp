@@ -12,6 +12,8 @@ class HistoryMatch {
   final String? teamBColorName;
   final String? statusName;
   final String? placeName;
+  final String? linkedPollTitle;
+  final String? linkedPollType;
 
   const HistoryMatch({
     required this.id,
@@ -25,6 +27,8 @@ class HistoryMatch {
     this.teamBColorName,
     this.statusName,
     this.placeName,
+    this.linkedPollTitle,
+    this.linkedPollType,
   });
 
   bool get hasScore => teamAGoals != null && teamBGoals != null;
@@ -51,8 +55,10 @@ class HistoryMatch {
       teamBColorHex: bHex,
       teamAColorName: aName as String?,
       teamBColorName: bName as String?,
-      statusName:    (json['statusName'] ?? json['status'] ?? json['stepKey']) as String?,
-      placeName:     json['placeName'] as String?,
+      statusName:      (json['statusName'] ?? json['status'] ?? json['stepKey']) as String?,
+      placeName:       json['placeName'] as String?,
+      linkedPollTitle: json['linkedPollTitle'] as String?,
+      linkedPollType:  json['linkedPollType'] as String?,
     );
   }
 

@@ -98,14 +98,16 @@ class DayView extends StatelessWidget {
                           color:      c.fg,
                         ),
                       ),
-                      const SizedBox(height: 3),
-                      Text(
-                        _timeLabel(ev),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isDark ? AppColors.slate400 : AppColors.slate500,
+                      if (!ev.timeTBD && ev.time != null && ev.time!.isNotEmpty) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          ev.time!,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDark ? AppColors.slate400 : AppColors.slate500,
+                          ),
                         ),
-                      ),
+                      ],
                       if (ev.description != null && ev.description!.isNotEmpty) ...[
                         const SizedBox(height: 4),
                         Text(
@@ -131,9 +133,5 @@ class DayView extends StatelessWidget {
     );
   }
 
-  static String _timeLabel(CalendarEvent ev) {
-    if (ev.timeTBD) return 'Horário a confirmar';
-    if (ev.time != null && ev.time!.isNotEmpty) return ev.time!;
-    return 'Sem horário';
-  }
+  // _timeLabel removido — horário oculto quando timeTBD ou time == null
 }

@@ -537,16 +537,23 @@ class _MatchCard extends StatelessWidget {
                       children: [
                         // Place name as primary title
                         if (match.placeName != null)
-                          Text(
-                            match.placeName!,
-                            style: TextStyle(
-                              fontSize:   13,
-                              fontWeight: FontWeight.w600,
-                              color: isDark ? Colors.white : AppColors.slate900,
+                          Row(children: [
+                            Icon(Icons.location_on_rounded, size: 11,
+                                color: isDark ? AppColors.slate500 : AppColors.slate400),
+                            const SizedBox(width: 3),
+                            Expanded(
+                              child: Text(
+                                match.placeName!,
+                                style: TextStyle(
+                                  fontSize:   13,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark ? Colors.white : AppColors.slate900,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                          ]),
                         const SizedBox(height: 5),
                         // Meta row
                         Wrap(
@@ -582,6 +589,36 @@ class _MatchCard extends StatelessWidget {
                               ),
                           ],
                         ),
+
+                        // Linked event row
+                        if (match.linkedPollTitle != null) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(
+                                match.linkedPollType == 'event'
+                                    ? Icons.celebration_rounded
+                                    : Icons.how_to_vote_rounded,
+                                size:  11,
+                                color: match.linkedPollType == 'event'
+                                    ? const Color(0xFFFBBF24)
+                                    : (isDark ? AppColors.slate500 : AppColors.slate400),
+                              ),
+                              const SizedBox(width: 3),
+                              Expanded(
+                                child: Text(
+                                  match.linkedPollTitle!,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: isDark ? AppColors.slate500 : AppColors.slate400,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),

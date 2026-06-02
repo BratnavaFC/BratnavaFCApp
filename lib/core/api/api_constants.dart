@@ -52,6 +52,9 @@ class ApiConstants {
   // Matches
   static String currentMatch(String groupId) =>
       '/api/matches/group/$groupId/current';
+  /// Lista de partidas não-finalizadas do grupo (máx. 5 simultâneas).
+  static String upcomingMatches(String groupId) =>
+      '/api/matches/group/$groupId/upcoming';
   static String matchDetails(String groupId, String matchId) =>
       '/api/Matches/group/$groupId/$matchId/details';
   static String playerRecentMatches(String groupId) =>
@@ -90,6 +93,9 @@ class ApiConstants {
       '/api/groups/$groupId/payments/my-pending-items';
   static String paySelected(String groupId) =>
       '/api/groups/$groupId/payments/pay-selected';
+  /// Totais de pendências por jogador (admin).
+  static String paymentPendingTotals(String groupId) =>
+      '/api/groups/$groupId/payments/pending-totals';
   static String initiateMonth(String groupId, int year, int month) =>
       '/api/groups/$groupId/payments/monthly/$year/$month/initiate';
   static String isMonthInitiated(String groupId, int year, int month) =>
@@ -157,6 +163,7 @@ class ApiConstants {
 
   // Matches – workflow completo
   static String matchCreate(String groupId)              => '/api/Matches/group/$groupId';
+  static String matchDelete(String groupId, String id)   => '/api/Matches/group/$groupId/$id';
   static String matchHeader(String groupId, String id)   => '/api/Matches/group/$groupId/$id/header';
   static String matchAcceptation(String groupId, String id) => '/api/Matches/group/$groupId/$id/acceptation';
   static String matchMatchmaking(String groupId, String id) => '/api/Matches/group/$groupId/$id/matchmaking';
@@ -182,6 +189,12 @@ class ApiConstants {
   static String matchGuest(String groupId, String id)    => '/api/matches/group/$groupId/$id/guests';
   static String matchPlayerRole(String groupId, String id, String mpId) =>
       '/api/Matches/group/$groupId/$id/players/$mpId/role';
+  /// Marca/desmarca um jogador como "não foi jogar" (DidNotPlay).
+  static String matchPlayerNoShow(String groupId, String id, String mpId) =>
+      '/api/Matches/group/$groupId/$id/players/$mpId/no-show';
+  /// Vincula ou desvincula uma votação/evento a esta partida.
+  static String matchLinkedPoll(String groupId, String id) =>
+      '/api/Matches/group/$groupId/$id/linked-poll';
 
   // Match invite — aceitar/rejeitar pelo token JWT (sem playerId)
   static String matchMyInviteAccept(String groupId, String matchId) =>

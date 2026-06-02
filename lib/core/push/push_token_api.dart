@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:logger/logger.dart';
 import '../api/api_constants.dart';
+import '../api/interceptors/auth_interceptor.dart';
 
 /// Responsável por registrar o token FCM no backend.
 /// Recebe um [Dio] já configurado (com AuthInterceptor) de fora.
@@ -23,6 +24,7 @@ class PushTokenApi {
           'token':    token,
           'platform': platform,
         },
+        options: Options(extra: {AuthInterceptor.skipUnauthorizedKey: true}),
       );
       return response.statusCode != null && response.statusCode! < 300;
     } on DioException catch (e) {

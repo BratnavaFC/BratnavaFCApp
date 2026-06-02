@@ -122,16 +122,14 @@ class EventDetailSheet extends StatelessWidget {
                     label: _formatDate(ev.date),
                     isDark: isDark,
                   ),
-                  const SizedBox(height: 8),
-                  _InfoRow(
-                    icon: Icons.access_time_rounded,
-                    label: ev.timeTBD
-                        ? 'Horário a confirmar'
-                        : ev.time != null
-                            ? ev.time!
-                            : 'Sem horário',
-                    isDark: isDark,
-                  ),
+                  if (!ev.timeTBD && ev.time != null && ev.time!.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    _InfoRow(
+                      icon: Icons.access_time_rounded,
+                      label: ev.time!,
+                      isDark: isDark,
+                    ),
+                  ],
                   if (ev.description != null && ev.description!.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     _InfoRow(

@@ -13,7 +13,10 @@ class App extends ConsumerStatefulWidget {
 }
 
 class _AppState extends ConsumerState<App> {
-  bool _pushInitialized = false;
+  /// true após os listeners FCM (foreground, background, tokenRefresh) serem
+  /// configurados. Diferente do registro de token, que deve ocorrer a cada
+  /// novo usuário que faz login.
+  bool _listenersInitialized = false;
 
   @override
   void initState() {
@@ -24,15 +27,25 @@ class _AppState extends ConsumerState<App> {
 
   void _tryInitPush() {
     final isLoggedIn = ref.read(accountStoreProvider).isLoggedIn;
-    if (isLoggedIn && !_pushInitialized) {
-      _pushInitialized = true;
-      // Delay to let the current frame/navigation complete before FCM's
-      // platform-channel calls (requestPermission + getToken) hit the
-      // Android main thread — avoids visible UI freeze on login.
-      Future.delayed(const Duration(seconds: 2), () {
-        if (mounted) ref.read(pushServiceProvider).initialize();
-      });
-    }
+    if (!isLoggedIn) return;
+    _schedulePushInit();
+  }
+
+  /// Decide entre inicialização completa (primeira vez) ou apenas
+  /// re-registro de token (usuário trocou ou voltou após logout).
+  void _schedulePushInit() {
+    // Delay para deixar o frame/navegação terminar antes das chamadas de
+    // plataforma do FCM, evitando congelamento visível no Android.
+    Future.delayed(const Duration(seconds: 2), () {
+      if (!mounted) return;
+      final push = ref.read(pushServiceProvider);
+      if (!_listenersInitialized) {
+        _listenersInitialized = true;
+        push.initialize(); // listeners FCM + registro de token
+      } else {
+        push.registerForCurrentUser(); // só re-registra o token para o novo usuário
+      }
+    });
   }
 
   @override
@@ -42,11 +55,8 @@ class _AppState extends ConsumerState<App> {
     // Escuta mudanças de login para inicializar push assim que o usuário fizer login
     ref.listen<AccountState>(accountStoreProvider, (previous, next) {
       final wasLoggedIn = previous?.isLoggedIn ?? false;
-      if (!wasLoggedIn && next.isLoggedIn && !_pushInitialized) {
-        _pushInitialized = true;
-        Future.delayed(const Duration(seconds: 2), () {
-          if (mounted) ref.read(pushServiceProvider).initialize();
-        });
+      if (!wasLoggedIn && next.isLoggedIn) {
+        _schedulePushInit();
       }
     });
 

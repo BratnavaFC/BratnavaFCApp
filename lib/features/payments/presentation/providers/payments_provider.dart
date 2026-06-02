@@ -1,12 +1,17 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../data/datasources/payments_remote_datasource.dart';
+import '../../data/datasources/transactions_remote_datasource.dart';
 import '../../domain/entities/payment_entities.dart';
 
 // ── Datasource ────────────────────────────────────────────────────────────────
 
 final paymentsDsProvider = Provider<PaymentsRemoteDataSource>(
   (ref) => PaymentsRemoteDataSource(ref.watch(dioProvider)),
+);
+
+final transactionsDsProvider = Provider<TransactionsRemoteDataSource>(
+  (ref) => TransactionsRemoteDataSource(ref.watch(dioProvider)),
 );
 
 // ── Admin providers ───────────────────────────────────────────────────────────

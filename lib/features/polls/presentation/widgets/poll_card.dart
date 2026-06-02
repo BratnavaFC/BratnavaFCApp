@@ -72,6 +72,29 @@ class PollCard extends StatelessWidget {
                           ),
                         ),
                       ],
+                      // Badge "vinculado à partida"
+                      if (poll.linkedMatchId != null && poll.linkedMatchId!.isNotEmpty) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color:        AppColors.emerald500.withValues(alpha: .1),
+                            borderRadius: BorderRadius.circular(20),
+                            border:       Border.all(
+                                color: AppColors.emerald500.withValues(alpha: .3)),
+                          ),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(Icons.sports_soccer_rounded, size: 9,
+                                color: AppColors.emerald700),
+                            const SizedBox(width: 3),
+                            Text('Partida',
+                                style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.emerald700)),
+                          ]),
+                        ),
+                      ],
                     ],
                   ),
                   if (poll.description != null) ...[

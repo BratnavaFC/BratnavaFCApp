@@ -171,17 +171,16 @@ class DayEventsSheet extends StatelessWidget {
                                           color:      c.fg,
                                         ),
                                       ),
-                                      Text(
-                                        ev.timeTBD
-                                            ? 'Horário a confirmar'
-                                            : ev.time ?? 'Sem horário',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: isDark
-                                              ? AppColors.slate400
-                                              : AppColors.slate500,
+                                      if (!ev.timeTBD && ev.time != null)
+                                        Text(
+                                          ev.time!,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: isDark
+                                                ? AppColors.slate400
+                                                : AppColors.slate500,
+                                          ),
                                         ),
-                                      ),
                                     ],
                                   ),
                                 ),

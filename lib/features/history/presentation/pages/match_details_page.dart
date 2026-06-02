@@ -9,6 +9,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/presentation/widgets/group_icon_renderer.dart';
 import '../../../auth/presentation/providers/account_store.dart';
 import '../../../group_settings/presentation/providers/group_settings_provider.dart';
+import '../../../matches/presentation/providers/match_provider.dart';
 import '../../domain/entities/match_details.dart';
 import '../providers/history_provider.dart';
 
@@ -31,6 +32,30 @@ class _MatchDetailsPageState extends ConsumerState<MatchDetailsPage> {
   int _goalsTab  = 0;
   List<ReplayClip> _replays = [];
   bool _sharingCard = false;
+  final Set<String> _togglingNoShow = {};
+
+  Future<void> _toggleNoShow(String matchPlayerId, bool currentDidNotPlay) async {
+    if (_togglingNoShow.contains(matchPlayerId)) return;
+    setState(() => _togglingNoShow.add(matchPlayerId));
+    try {
+      final ds = ref.read(matchDsProvider);
+      await ds.setNoShow(
+          widget.groupId, widget.matchId, matchPlayerId, !currentDidNotPlay);
+      if (mounted) {
+        ref.invalidate(matchDetailsProvider(
+            (groupId: widget.groupId, matchId: widget.matchId)));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(extractDioError(e, 'Erro ao atualizar presença')),
+          backgroundColor: AppColors.rose500,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _togglingNoShow.remove(matchPlayerId));
+    }
+  }
 
   @override
   void initState() {
@@ -119,18 +144,21 @@ class _MatchDetailsPageState extends ConsumerState<MatchDetailsPage> {
         ),
       ),
       data: (data) => _DetailsBody(
-        data:          data,
-        isDark:        isDark,
-        isAdmin:       isAdmin,
-        goalsTab:      _goalsTab,
-        icons:         icons,
-        replays:       _replays,
-        groupId:       widget.groupId,
-        accessToken:   accessToken,
-        sharingCard:   _sharingCard,
-        onGoalsTab:    (t) => setState(() => _goalsTab = t),
-        onBack:        () => context.go('/app/history'),
-        onShare:       _shareMatchCard,
+        data:           data,
+        isDark:         isDark,
+        isAdmin:        isAdmin,
+        canSeeStats:    isAdmin || (settings?.showPlayerStats ?? false),
+        goalsTab:       _goalsTab,
+        icons:          icons,
+        replays:        _replays,
+        groupId:        widget.groupId,
+        accessToken:    accessToken,
+        sharingCard:    _sharingCard,
+        onGoalsTab:     (t) => setState(() => _goalsTab = t),
+        onBack:         () => context.go('/app/history'),
+        onShare:        _shareMatchCard,
+        togglingNoShow: _togglingNoShow,
+        onToggleNoShow: _toggleNoShow,
       ),
     );
   }
@@ -142,6 +170,7 @@ class _DetailsBody extends StatelessWidget {
   final MatchDetails data;
   final bool         isDark;
   final bool         isAdmin;
+  final bool         canSeeStats;
   final int          goalsTab;
   final void Function(int) onGoalsTab;
   final VoidCallback onBack;
@@ -151,11 +180,14 @@ class _DetailsBody extends StatelessWidget {
   final String?          accessToken;
   final bool         sharingCard;
   final VoidCallback onShare;
+  final Set<String>                 togglingNoShow;
+  final void Function(String, bool) onToggleNoShow;
 
   const _DetailsBody({
     required this.data,
     required this.isDark,
     required this.isAdmin,
+    required this.canSeeStats,
     required this.goalsTab,
     required this.onGoalsTab,
     required this.onBack,
@@ -165,6 +197,8 @@ class _DetailsBody extends StatelessWidget {
     required this.accessToken,
     required this.sharingCard,
     required this.onShare,
+    this.togglingNoShow = const {},
+    required this.onToggleNoShow,
   });
 
   Color get aColor => _hexColor(data.teamAColor?.hexValue) ?? const Color(0xFF0f172a);
@@ -277,35 +311,40 @@ class _DetailsBody extends StatelessWidget {
 
               const SizedBox(height: 12),
 
-              // Goals section (always visible)
-              _SectionHeader(
-                title: 'Gols (${goals.length})',
-                isDark: isDark,
-              ),
-              _GoalsSection(
-                goals:     goals,
-                tab:       goalsTab,
-                onTab:     onGoalsTab,
-                aColor:    aColor,
-                bColor:    bColor,
-                aName:     aName,
-                bName:     bName,
-                isDark:    isDark,
-                icons:     icons,
-              ),
+              // Gols — visível apenas para admin ou quando showPlayerStats=true
+              if (canSeeStats) ...[
+                _SectionHeader(
+                  title: 'Gols (${goals.length})',
+                  isDark: isDark,
+                ),
+                _GoalsSection(
+                  goals:     goals,
+                  tab:       goalsTab,
+                  onTab:     onGoalsTab,
+                  aColor:    aColor,
+                  bColor:    bColor,
+                  aName:     aName,
+                  bName:     bName,
+                  isDark:    isDark,
+                  icons:     icons,
+                ),
+              ],
 
               const SizedBox(height: 12),
 
               // ── Jogadores ─────────────────────────────────────────
               _TeamCards(
-                teamAPlayers: data.teamAPlayers,
-                teamBPlayers: data.teamBPlayers,
-                aColor: aColor,
-                bColor: bColor,
-                aName:  aName,
-                bName:  bName,
-                isDark: isDark,
-                icons:  icons,
+                teamAPlayers:    data.teamAPlayers,
+                teamBPlayers:    data.teamBPlayers,
+                aColor:          aColor,
+                bColor:          bColor,
+                aName:           aName,
+                bName:           bName,
+                isDark:          isDark,
+                icons:           icons,
+                isAdmin:         isAdmin,
+                togglingNoShow:  togglingNoShow,
+                onToggleNoShow:  onToggleNoShow,
               ),
 
               // Replays section (only when replays exist)
@@ -357,21 +396,51 @@ class _HeroCard extends StatelessWidget {
             .format(data.playedAt!)
         : null;
 
+    // Determina cor da borda: cor do vencedor ou split no empate
+    final aGoals   = data.teamAGoals ?? 0;
+    final bGoals   = data.teamBGoals ?? 0;
+    final winColor = aGoals > bGoals ? aColor : bGoals > aGoals ? bColor : null;
+
+    // Strips: vitória = toda a borda na cor do vencedor
+    //         empate  = esquerda/topo-esquerdo/base-esquerdo em aColor,
+    //                   direita/topo-direito/base-direito em bColor
+    const double thickness = 4;
+
+    Widget hStrip() => winColor != null
+        ? Container(height: thickness, color: winColor)
+        : Row(children: [
+            Expanded(child: Container(height: thickness, color: aColor)),
+            Expanded(child: Container(height: thickness, color: bColor)),
+          ]);
+
+    Widget vStrip(Color color) =>
+        Container(width: thickness, color: winColor ?? color);
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Column(
-          children: [
-            // Top color strips
-            Row(children: [
-              Expanded(child: Container(height: 5, color: aColor)),
-              Expanded(child: Container(height: 5, color: bColor)),
-            ]),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.black.withValues(alpha: 0.25), width: 1),
+        ),
+        child: ClipRRect(
+        borderRadius: BorderRadius.circular(15),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // ── Lateral esquerda (Time A) ─────────────────────────
+              vStrip(aColor),
+
+              // ── Conteúdo central ──────────────────────────────────
+              Expanded(
+                child: Column(
+                  children: [
+                    // Top strip
+                    hStrip(),
 
             // Dark background body
             Container(
-              width: double.infinity,
               color: const Color(0xFF0f172a),
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
               child: Column(
@@ -572,14 +641,19 @@ class _HeroCard extends StatelessWidget {
               ),
             ),
 
-            // Bottom color strips
-            Row(children: [
-              Expanded(child: Container(height: 5, color: aColor)),
-              Expanded(child: Container(height: 5, color: bColor)),
-            ]),
-          ],
+                    // Bottom strip
+                    hStrip(),
+                  ],
+                ),
+              ),
+
+              // ── Lateral direita (Time B) ──────────────────────────
+              vStrip(bColor),
+            ],
+          ),
         ),
-      ),
+      ),  // ClipRRect
+      ),  // Container (outer border)
     );
   }
 }
@@ -590,6 +664,9 @@ class _TeamCards extends StatelessWidget {
   final List<MatchPlayer> teamAPlayers;
   final List<MatchPlayer> teamBPlayers;
   final Color aColor, bColor;
+  final bool                            isAdmin;
+  final Set<String>                     togglingNoShow;
+  final void Function(String, bool)     onToggleNoShow;
   final String aName, bName;
   final bool isDark;
   final GroupIcons icons;
@@ -603,6 +680,9 @@ class _TeamCards extends StatelessWidget {
     required this.bName,
     required this.isDark,
     required this.icons,
+    this.isAdmin       = false,
+    this.togglingNoShow = const {},
+    required this.onToggleNoShow,
   });
 
   @override
@@ -614,21 +694,27 @@ class _TeamCards extends StatelessWidget {
         children: [
           Expanded(
             child: _TeamCard(
-              players: teamAPlayers,
-              color:   aColor,
-              name:    aName,
-              isDark:  isDark,
-              icons:   icons,
+              players:        teamAPlayers,
+              color:          aColor,
+              name:           aName,
+              isDark:         isDark,
+              icons:          icons,
+              isAdmin:        isAdmin,
+              togglingNoShow: togglingNoShow,
+              onToggleNoShow: onToggleNoShow,
             ),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: _TeamCard(
-              players: teamBPlayers,
-              color:   bColor,
-              name:    bName,
-              isDark:  isDark,
-              icons:   icons,
+              players:        teamBPlayers,
+              color:          bColor,
+              name:           bName,
+              isDark:         isDark,
+              icons:          icons,
+              isAdmin:        isAdmin,
+              togglingNoShow: togglingNoShow,
+              onToggleNoShow: onToggleNoShow,
             ),
           ),
         ],
@@ -638,11 +724,14 @@ class _TeamCards extends StatelessWidget {
 }
 
 class _TeamCard extends StatelessWidget {
-  final List<MatchPlayer> players;
-  final Color      color;
-  final String     name;
-  final bool       isDark;
-  final GroupIcons icons;
+  final List<MatchPlayer>           players;
+  final Color                       color;
+  final String                      name;
+  final bool                        isDark;
+  final GroupIcons                  icons;
+  final bool                        isAdmin;
+  final Set<String>                 togglingNoShow;
+  final void Function(String, bool) onToggleNoShow;
 
   const _TeamCard({
     required this.players,
@@ -650,6 +739,9 @@ class _TeamCard extends StatelessWidget {
     required this.name,
     required this.isDark,
     required this.icons,
+    this.isAdmin        = false,
+    this.togglingNoShow = const {},
+    required this.onToggleNoShow,
   });
 
   @override
@@ -720,47 +812,117 @@ class _TeamCard extends StatelessWidget {
               ),
             )
           else
-            ...players.map((p) => Container(
-              decoration: BoxDecoration(
-                border: Border(
-                  left: BorderSide(color: color, width: 3),
-                  bottom: BorderSide(
-                    color: isDark ? AppColors.slate800 : AppColors.slate100,
+            ...players.map((p) {
+              final absent    = p.didNotPlay;
+              final toggling  = togglingNoShow.contains(p.matchPlayerId);
+              final nameColor = absent
+                  ? (isDark ? AppColors.slate600 : AppColors.slate400)
+                  : (isDark ? AppColors.slate100 : AppColors.slate800);
+
+              return Opacity(
+                opacity: absent ? 0.55 : 1.0,
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: Border(
+                      left: BorderSide(
+                          color: absent
+                              ? (isDark ? AppColors.slate700 : AppColors.slate300)
+                              : color,
+                          width: 3),
+                      bottom: BorderSide(
+                        color: isDark ? AppColors.slate800 : AppColors.slate100,
+                      ),
+                    ),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 7),
+                  child: Row(
+                    children: [
+                      if (p.isGoalkeeper) ...[
+                        renderGroupIcon(
+                          icons.goalkeeper,
+                          size:  14,
+                          color: isDark ? AppColors.slate400 : AppColors.slate500,
+                        ),
+                        const SizedBox(width: 4),
+                      ],
+                      Expanded(
+                        child: Text(
+                          p.playerName,
+                          style: TextStyle(
+                            fontSize:      12,
+                            color:         nameColor,
+                            decoration:    absent
+                                ? TextDecoration.lineThrough
+                                : TextDecoration.none,
+                            decorationColor: nameColor,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      // Badge "não foi"
+                      if (absent) ...[
+                        const SizedBox(width: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 5, vertical: 1),
+                          decoration: BoxDecoration(
+                            color:        AppColors.rose500.withValues(alpha: .12),
+                            borderRadius: BorderRadius.circular(4),
+                            border:       Border.all(
+                                color: AppColors.rose500.withValues(alpha: .3)),
+                          ),
+                          child: const Text('não foi',
+                              style: TextStyle(
+                                  fontSize:   9,
+                                  fontWeight: FontWeight.w600,
+                                  color:      AppColors.rose500)),
+                        ),
+                      ],
+                      if (p.isMvp) ...[
+                        const SizedBox(width: 4),
+                        renderGroupIcon(
+                          icons.mvp,
+                          size:  13,
+                          color: const Color(0xFFfbbf24),
+                        ),
+                      ],
+                      // Botão de toggle no-show (só admin)
+                      if (isAdmin) ...[
+                        const SizedBox(width: 4),
+                        SizedBox(
+                          width: 26, height: 26,
+                          child: toggling
+                              ? const Padding(
+                                  padding: EdgeInsets.all(5),
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 1.5))
+                              : IconButton(
+                                  padding:     EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                  tooltip: absent
+                                      ? 'Desfazer: marcar como presente'
+                                      : 'Marcar como não veio',
+                                  icon: Icon(
+                                    absent
+                                        ? Icons.person_add_alt_1_rounded
+                                        : Icons.person_remove_alt_1_rounded,
+                                    size:  15,
+                                    color: absent
+                                        ? AppColors.emerald500
+                                        : AppColors.rose400,
+                                  ),
+                                  onPressed: () => onToggleNoShow(
+                                      p.matchPlayerId, absent),
+                                ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
-              ),
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 8, vertical: 7),
-              child: Row(
-                children: [
-                  if (p.isGoalkeeper) ...[
-                    renderGroupIcon(
-                      icons.goalkeeper,
-                      size:  14,
-                      color: isDark ? AppColors.slate400 : AppColors.slate500,
-                    ),
-                    const SizedBox(width: 4),
-                  ],
-                  Expanded(
-                    child: Text(
-                      p.playerName,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark ? AppColors.slate100 : AppColors.slate800,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (p.isMvp)
-                    renderGroupIcon(
-                      icons.mvp,
-                      size:  13,
-                      color: const Color(0xFFfbbf24),
-                    ),
-                ],
-              ),
-            )),
+              );
+            }),
         ],
       ),
     );

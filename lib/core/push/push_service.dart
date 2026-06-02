@@ -96,6 +96,12 @@ class PushService {
     }
   }
 
+  /// Registra o token FCM do usuário atualmente autenticado no backend.
+  ///
+  /// Deve ser chamado sempre que um novo usuário fizer login, mesmo que os
+  /// listeners FCM já estejam configurados (i.e., [initialize] já foi chamado).
+  Future<void> registerForCurrentUser() => _registerToken();
+
   void _listenTokenRefresh() {
     _fcm.onTokenRefresh.listen((newToken) async {
       _log.d('[Push] Token renovado automaticamente.');

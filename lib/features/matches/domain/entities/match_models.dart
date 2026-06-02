@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/utils/date_utils.dart';
 
 // ── Passo da partida ──────────────────────────────────────────────────────────
 
@@ -41,11 +42,11 @@ enum MatchStep {
     switch (this) {
       case create:  return 'Criar';
       case accept:  return 'Aceitação';
-      case teams:   return 'MatchMaking';
-      case playing: return 'Jogo';
-      case ended:   return 'Encerrar';
+      case teams:   return 'Formação';
+      case playing: return 'Em jogo';
+      case ended:   return 'Encerramento';
       case post:    return 'Pós-jogo';
-      case done:    return 'Final';
+      case done:    return 'Finalizada';
     }
   }
 }
@@ -75,6 +76,55 @@ class TeamColorInfo {
   );
 }
 
+// ── Header resumido de uma partida (endpoint /upcoming) ──────────────────────
+
+class MatchHeaderDto {
+  final String   matchId;
+  final String   groupId;
+  final DateTime playedAt;
+  final String   placeName;
+  final int      status;
+  final String   statusName;
+  final String   stepKey;
+  final bool     canRewind;
+  final int?     teamAGoals;
+  final int?     teamBGoals;
+  final String?  linkedPollId;
+  final DateTime? actualStartTime;
+
+  const MatchHeaderDto({
+    required this.matchId,
+    required this.groupId,
+    required this.playedAt,
+    required this.placeName,
+    required this.status,
+    required this.statusName,
+    required this.stepKey,
+    required this.canRewind,
+    this.teamAGoals,
+    this.teamBGoals,
+    this.linkedPollId,
+    this.actualStartTime,
+  });
+
+  MatchStep get step => MatchStep.fromKey(stepKey);
+
+  factory MatchHeaderDto.fromJson(Map<String, dynamic> j) => MatchHeaderDto(
+    matchId:        (j['matchId']   ?? j['MatchId']   ?? '').toString(),
+    groupId:        (j['groupId']   ?? j['GroupId']   ?? '').toString(),
+    playedAt:       parseApiDate((j['playedAt'] ?? j['PlayedAt'])?.toString()),
+    placeName:      j['placeName']  as String? ?? j['PlaceName']  as String? ?? '',
+    status:         j['status']     as int?    ?? j['Status']     as int?    ?? 0,
+    statusName:     j['statusName'] as String? ?? j['StatusName'] as String? ?? '',
+    stepKey:        j['stepKey']    as String? ?? j['StepKey']    as String? ?? 'create',
+    canRewind:      j['canRewind']  as bool?   ?? j['CanRewind']  as bool?   ?? false,
+    teamAGoals:     j['teamAGoals'] as int?    ?? j['TeamAGoals'] as int?,
+    teamBGoals:     j['teamBGoals'] as int?    ?? j['TeamBGoals'] as int?,
+    linkedPollId:   (j['linkedPollId'] ?? j['LinkedPollId'])?.toString(),
+    actualStartTime: parseApiDateOrNull((j['actualStartTime'] ?? j['ActualStartTime'])?.toString()),
+  );
+}
+
 // ── Jogador na partida ────────────────────────────────────────────────────────
 
 class MatchPlayerInfo {
@@ -90,6 +140,12 @@ class MatchPlayerInfo {
   final int?    absenceType;
   final String? absenceDescription;
 
+  /// Jogador confirmou mas não apareceu. Excluído de stats, MVP e gols.
+  final bool didNotPlay;
+
+  /// É MVP desta partida (só preenchido no histórico/pós-jogo).
+  final bool isMvp;
+
   const MatchPlayerInfo({
     required this.matchPlayerId,
     required this.playerId,
@@ -100,6 +156,8 @@ class MatchPlayerInfo {
     required this.inviteResponse,
     this.absenceType,
     this.absenceDescription,
+    this.didNotPlay = false,
+    this.isMvp      = false,
   });
 
   static InviteResponse _parseInvite(dynamic v) {
@@ -119,6 +177,8 @@ class MatchPlayerInfo {
     inviteResponse:     _parseInvite(j['inviteResponse'] ?? j['InviteResponse']),
     absenceType:        j['absenceType']         as int?    ?? j['AbsenceType']         as int?,
     absenceDescription: j['absenceDescription']  as String? ?? j['AbsenceDescription']  as String?,
+    didNotPlay:         j['didNotPlay']          as bool?   ?? j['DidNotPlay']          as bool?   ?? false,
+    isMvp:              j['isMvp']               as bool?   ?? j['IsMvp']               as bool?   ?? false,
   );
 }
 
@@ -136,6 +196,10 @@ class MatchGoal {
   final String? scorerMatchPlayerId;
   final String? assistMatchPlayerId;
 
+  /// Placar acumulado após este gol (calculado pelo servidor).
+  final int? scoreAAfter;
+  final int? scoreBAfter;
+
   const MatchGoal({
     required this.goalId,
     this.scorerPlayerId,
@@ -147,6 +211,8 @@ class MatchGoal {
     required this.isOwnGoal,
     this.scorerMatchPlayerId,
     this.assistMatchPlayerId,
+    this.scoreAAfter,
+    this.scoreBAfter,
   });
 
   factory MatchGoal.fromJson(Map<String, dynamic> j) => MatchGoal(
@@ -160,6 +226,8 @@ class MatchGoal {
     isOwnGoal:      j['isOwnGoal']      as bool?   ?? j['IsOwnGoal']      as bool?   ?? false,
     scorerMatchPlayerId: (j['scorerMatchPlayerId'] ?? j['ScorerMatchPlayerId'])?.toString(),
     assistMatchPlayerId: (j['assistMatchPlayerId'] ?? j['AssistMatchPlayerId'])?.toString(),
+    scoreAAfter:    j['scoreAAfter']    as int?    ?? j['ScoreAAfter']    as int?,
+    scoreBAfter:    j['scoreBAfter']    as int?    ?? j['ScoreBAfter']    as int?,
   );
 }
 
@@ -369,6 +437,8 @@ class MatchState {
     this.playedAt,
     this.placeName,
     this.canRewind         = false,
+    this.linkedPollId,
+    this.actualStartTime,
     this.teamAColor,
     this.teamBColor,
     this.colorsLocked      = false,
@@ -378,10 +448,12 @@ class MatchState {
     this.pendingPlayers    = const [],
     this.maxPlayers        = 14,
     this.acceptedOverLimit = false,
+    this.canAdvanceToMatchmaking = false,
     this.teamAPlayers      = const [],
     this.teamBPlayers      = const [],
     this.unassignedPlayers = const [],
     this.participants      = const [],
+    this.canStartMatch     = false,
     this.teamGenOptions    = const [],
     this.selectedTeamGenIdx = 0,
     this.goals             = const [],
@@ -392,7 +464,13 @@ class MatchState {
     this.voteCounts        = const [],
     this.allVoted          = false,
     this.eligibleVoters    = const [],
+    this.canVote,
+    this.hasVoted,
+    this.myVotedForMatchPlayerId,
     this.groupSettings,
+    // Multi-match
+    this.upcomingHeaders   = const [],
+    this.selectedMatchIdx  = 0,
   });
 
   final bool    loading;
@@ -405,6 +483,11 @@ class MatchState {
   final String?   placeName;
   final bool      canRewind;
 
+  /// Id da votação/evento vinculado a esta partida (null = sem vínculo).
+  final String?   linkedPollId;
+  /// Hora real (UTC) em que o admin iniciou a partida.
+  final DateTime? actualStartTime;
+
   final TeamColorInfo?      teamAColor;
   final TeamColorInfo?      teamBColor;
   final bool                colorsLocked;
@@ -415,11 +498,15 @@ class MatchState {
   final List<MatchPlayerInfo> pendingPlayers;
   final int  maxPlayers;
   final bool acceptedOverLimit;
+  /// Backend calculou: pode avançar para MatchMaking.
+  final bool canAdvanceToMatchmaking;
 
   final List<MatchPlayerInfo> teamAPlayers;
   final List<MatchPlayerInfo> teamBPlayers;
   final List<MatchPlayerInfo> unassignedPlayers;
   final List<MatchPlayerInfo> participants;
+  /// Backend calculou: pode iniciar a partida (ambos os times têm jogadores).
+  final bool canStartMatch;
 
   final List<TeamGenOption> teamGenOptions;
   final int selectedTeamGenIdx;
@@ -433,63 +520,146 @@ class MatchState {
   final List<VoteCount>       voteCounts;
   final bool                  allVoted;
   final List<MatchPlayerInfo> eligibleVoters;
+  /// Backend calculou se o usuário autenticado pode votar (null = sem jogador).
+  final bool? canVote;
+  final bool? hasVoted;
+  final String? myVotedForMatchPlayerId;
 
   final MatchGroupSettings? groupSettings;
+
+  // ── Multi-match ───────────────────────────────────────────────────────────
+  /// Lista de partidas não-finalizadas (do endpoint /upcoming).
+  final List<MatchHeaderDto> upcomingHeaders;
+  final int selectedMatchIdx;
 
   // ── Derivados ─────────────────────────────────────────────────────────────
 
   bool get hasMatch      => matchId != null && matchId!.isNotEmpty;
-  bool get teamsAssigned => teamAPlayers.isNotEmpty && teamBPlayers.isNotEmpty;
+  /// Fallback local: usa flag do backend quando disponível.
+  bool get teamsAssigned => canStartMatch || (teamAPlayers.isNotEmpty && teamBPlayers.isNotEmpty);
+
+  // Sentinel usado para distinguir "não passou" de "passou null explicitamente"
+  static const Object _unset = Object();
 
   MatchState copyWith({
     bool? loading, bool? mutating, String? error,
     String? matchId, String? groupId, MatchStep? step,
     DateTime? playedAt, String? placeName, bool? canRewind,
+    Object? linkedPollId = _unset, DateTime? actualStartTime,
     TeamColorInfo? teamAColor, TeamColorInfo? teamBColor,
     bool? colorsLocked, List<TeamColorInfo>? availableColors,
     List<MatchPlayerInfo>? acceptedPlayers, List<MatchPlayerInfo>? rejectedPlayers,
     List<MatchPlayerInfo>? pendingPlayers, int? maxPlayers, bool? acceptedOverLimit,
+    bool? canAdvanceToMatchmaking,
     List<MatchPlayerInfo>? teamAPlayers, List<MatchPlayerInfo>? teamBPlayers,
     List<MatchPlayerInfo>? unassignedPlayers, List<MatchPlayerInfo>? participants,
+    bool? canStartMatch,
     List<TeamGenOption>? teamGenOptions, int? selectedTeamGenIdx,
     List<MatchGoal>? goals, int? teamAGoals, int? teamBGoals,
     List<MvpInfo>? computedMvps, List<VoteInfo>? votes, List<VoteCount>? voteCounts,
     bool? allVoted, List<MatchPlayerInfo>? eligibleVoters,
+    bool? canVote, bool? hasVoted, String? myVotedForMatchPlayerId,
     MatchGroupSettings? groupSettings,
+    List<MatchHeaderDto>? upcomingHeaders, int? selectedMatchIdx,
   }) =>
       MatchState(
-        loading:            loading            ?? this.loading,
-        mutating:           mutating           ?? this.mutating,
-        error:              error              ?? this.error,
-        matchId:            matchId            ?? this.matchId,
-        groupId:            groupId            ?? this.groupId,
-        step:               step               ?? this.step,
-        playedAt:           playedAt           ?? this.playedAt,
-        placeName:          placeName          ?? this.placeName,
-        canRewind:          canRewind          ?? this.canRewind,
-        teamAColor:         teamAColor         ?? this.teamAColor,
-        teamBColor:         teamBColor         ?? this.teamBColor,
-        colorsLocked:       colorsLocked       ?? this.colorsLocked,
-        availableColors:    availableColors    ?? this.availableColors,
-        acceptedPlayers:    acceptedPlayers    ?? this.acceptedPlayers,
-        rejectedPlayers:    rejectedPlayers    ?? this.rejectedPlayers,
-        pendingPlayers:     pendingPlayers     ?? this.pendingPlayers,
-        maxPlayers:         maxPlayers         ?? this.maxPlayers,
-        acceptedOverLimit:  acceptedOverLimit  ?? this.acceptedOverLimit,
-        teamAPlayers:       teamAPlayers       ?? this.teamAPlayers,
-        teamBPlayers:       teamBPlayers       ?? this.teamBPlayers,
-        unassignedPlayers:  unassignedPlayers  ?? this.unassignedPlayers,
-        participants:       participants       ?? this.participants,
-        teamGenOptions:     teamGenOptions     ?? this.teamGenOptions,
-        selectedTeamGenIdx: selectedTeamGenIdx ?? this.selectedTeamGenIdx,
-        goals:              goals              ?? this.goals,
-        teamAGoals:         teamAGoals         ?? this.teamAGoals,
-        teamBGoals:         teamBGoals         ?? this.teamBGoals,
-        computedMvps:       computedMvps       ?? this.computedMvps,
-        votes:              votes              ?? this.votes,
-        voteCounts:         voteCounts         ?? this.voteCounts,
-        allVoted:           allVoted           ?? this.allVoted,
-        eligibleVoters:     eligibleVoters     ?? this.eligibleVoters,
-        groupSettings:      groupSettings      ?? this.groupSettings,
+        loading:                 loading                ?? this.loading,
+        mutating:                mutating               ?? this.mutating,
+        error:                   error                  ?? this.error,
+        matchId:                 matchId                ?? this.matchId,
+        groupId:                 groupId                ?? this.groupId,
+        step:                    step                   ?? this.step,
+        playedAt:                playedAt               ?? this.playedAt,
+        placeName:               placeName              ?? this.placeName,
+        canRewind:               canRewind              ?? this.canRewind,
+        linkedPollId:            identical(linkedPollId, _unset) ? this.linkedPollId : linkedPollId as String?,
+        actualStartTime:         actualStartTime        ?? this.actualStartTime,
+        teamAColor:              teamAColor             ?? this.teamAColor,
+        teamBColor:              teamBColor             ?? this.teamBColor,
+        colorsLocked:            colorsLocked           ?? this.colorsLocked,
+        availableColors:         availableColors        ?? this.availableColors,
+        acceptedPlayers:         acceptedPlayers        ?? this.acceptedPlayers,
+        rejectedPlayers:         rejectedPlayers        ?? this.rejectedPlayers,
+        pendingPlayers:          pendingPlayers         ?? this.pendingPlayers,
+        maxPlayers:              maxPlayers             ?? this.maxPlayers,
+        acceptedOverLimit:       acceptedOverLimit      ?? this.acceptedOverLimit,
+        canAdvanceToMatchmaking: canAdvanceToMatchmaking ?? this.canAdvanceToMatchmaking,
+        teamAPlayers:            teamAPlayers           ?? this.teamAPlayers,
+        teamBPlayers:            teamBPlayers           ?? this.teamBPlayers,
+        unassignedPlayers:       unassignedPlayers      ?? this.unassignedPlayers,
+        participants:            participants           ?? this.participants,
+        canStartMatch:           canStartMatch          ?? this.canStartMatch,
+        teamGenOptions:          teamGenOptions         ?? this.teamGenOptions,
+        selectedTeamGenIdx:      selectedTeamGenIdx     ?? this.selectedTeamGenIdx,
+        goals:                   goals                  ?? this.goals,
+        teamAGoals:              teamAGoals             ?? this.teamAGoals,
+        teamBGoals:              teamBGoals             ?? this.teamBGoals,
+        computedMvps:            computedMvps           ?? this.computedMvps,
+        votes:                   votes                  ?? this.votes,
+        voteCounts:              voteCounts             ?? this.voteCounts,
+        allVoted:                allVoted               ?? this.allVoted,
+        eligibleVoters:          eligibleVoters         ?? this.eligibleVoters,
+        canVote:                 canVote                ?? this.canVote,
+        hasVoted:                hasVoted               ?? this.hasVoted,
+        myVotedForMatchPlayerId: myVotedForMatchPlayerId ?? this.myVotedForMatchPlayerId,
+        groupSettings:           groupSettings          ?? this.groupSettings,
+        upcomingHeaders:         upcomingHeaders        ?? this.upcomingHeaders,
+        selectedMatchIdx:        selectedMatchIdx       ?? this.selectedMatchIdx,
       );
+}
+
+// ── Detalhe enriquecido de partida upcoming (dashboard) ───────────────────────
+
+class UpcomingMatchDetails {
+  final MatchHeaderDto        header;
+  final List<MatchPlayerInfo> allPlayers;
+  final TeamColorInfo?        teamAColor;
+  final TeamColorInfo?        teamBColor;
+  /// Título da votação/evento vinculado (null = sem vínculo ou fetch falhou).
+  final String?               linkedEventTitle;
+  /// Emoji/ícone do evento, ex: "🌐", "⚽". Usado só quando [linkedIsEvent] = true.
+  final String?               linkedEventIcon;
+  /// true se o linked poll for do tipo 'event' (Sim/Talvez/Não), false = enquete.
+  final bool                  linkedIsEvent;
+  /// Texto do voto do usuário, ex: "Sim", "Não". null = não votou.
+  final String?               myVoteText;
+
+  const UpcomingMatchDetails({
+    required this.header,
+    this.allPlayers       = const [],
+    this.teamAColor,
+    this.teamBColor,
+    this.linkedEventTitle,
+    this.linkedEventIcon,
+    this.linkedIsEvent    = false,
+    this.myVoteText,
+  });
+
+  /// Aceitação ainda aberta: só nas etapas create/accept
+  bool get _acceptationOpen {
+    final k = header.stepKey.toLowerCase();
+    return k == 'create' || k == 'accept' || k == 'acceptation';
+  }
+
+  int get acceptedCount =>
+      allPlayers.where((p) => p.inviteResponse == InviteResponse.accepted).length;
+
+  /// Pendentes: só mensalistas e apenas enquanto aceitação está aberta.
+  int get pendingCount => _acceptationOpen
+      ? allPlayers.where((p) =>
+            p.inviteResponse == InviteResponse.pending && !p.isGuest).length
+      : 0;
+
+  /// Recusados: após fechar aceitação, quem não respondeu também conta como recusado.
+  int get refusedCount => _acceptationOpen
+      ? allPlayers.where((p) => p.inviteResponse == InviteResponse.declined).length
+      : allPlayers.where((p) =>
+            p.inviteResponse == InviteResponse.declined ||
+            p.inviteResponse == InviteResponse.pending).length;
+
+  MatchPlayerInfo? findPlayer(String playerId) {
+    if (playerId.isEmpty) return null;
+    try { return allPlayers.firstWhere((p) => p.playerId == playerId); }
+    catch (_) { return null; }
+  }
 }

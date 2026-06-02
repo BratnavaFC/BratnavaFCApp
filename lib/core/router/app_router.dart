@@ -136,7 +136,9 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path:    '/app/matches',
-            builder: (_, __) => const MatchesPage(),
+            builder: (_, state) => MatchesPage(
+              initialMatchId: state.uri.queryParameters['matchId'],
+            ),
           ),
           GoRoute(
             path:    '/app/groups',

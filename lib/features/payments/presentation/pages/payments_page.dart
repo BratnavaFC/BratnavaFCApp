@@ -8,7 +8,9 @@ import '../../../dashboard/presentation/providers/dashboard_provider.dart';
 import '../../../group_settings/presentation/providers/group_settings_provider.dart';
 import '../../../members/presentation/providers/members_provider.dart';
 import '../../data/datasources/payments_remote_datasource.dart';
+import '../../data/datasources/transactions_remote_datasource.dart';
 import '../../domain/entities/payment_entities.dart';
+import '../../domain/entities/transaction_entities.dart';
 import '../providers/payments_provider.dart';
 import '../widgets/monthly_payment_sheet.dart';
 import '../widgets/extra_payment_sheet.dart';
@@ -35,6 +37,12 @@ class _PaymentsPageState extends ConsumerState<PaymentsPage>
   int  _extraMonth = DateTime.now().month;
   int  _paymentMode = 0;   // 0=Monthly, 1=PerGame
   bool _loadingMode = true;
+
+  // ── Caixa ────────────────────────────────────────────────────────────────
+  bool   _showCaixa    = false;
+  String _caixaSubTab  = 'mes'; // 'mes' | 'geral'
+  int    _txYear       = DateTime.now().year;
+  int    _txMonth      = DateTime.now().month;
 
   String? get _groupId {
     final acc = ref.read(accountStoreProvider).activeAccount;
@@ -280,50 +288,63 @@ class _PaymentsPageState extends ConsumerState<PaymentsPage>
         ],
         body: Column(
           children: [
-            // Tab bar
-            Container(
-              color: isDark ? AppColors.slate900 : Colors.white,
-              child: TabBar(
-                controller: _tabCtrl,
-                tabs: [
-                  if (_paymentMode == 0)
-                    const Tab(text: '📅 Mensalidades'),
-                  const Tab(text: '💰 Cobranças extras'),
-                ],
-                labelColor:        isDark ? Colors.white : AppColors.slate900,
-                unselectedLabelColor: isDark ? AppColors.slate500 : AppColors.slate400,
-                indicatorColor:    isDark ? Colors.white : AppColors.slate900,
-                labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            // Tab bar (oculto quando Caixa está ativo)
+            if (!_showCaixa)
+              Container(
+                color: isDark ? AppColors.slate900 : Colors.white,
+                child: TabBar(
+                  controller: _tabCtrl,
+                  tabs: [
+                    if (_paymentMode == 0)
+                      const Tab(text: '📅 Mensalidades'),
+                    const Tab(text: '💰 Cobranças extras'),
+                  ],
+                  labelColor:        isDark ? Colors.white : AppColors.slate900,
+                  unselectedLabelColor: isDark ? AppColors.slate500 : AppColors.slate400,
+                  indicatorColor:    isDark ? Colors.white : AppColors.slate900,
+                  labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                ),
               ),
-            ),
+
             Expanded(
-              child: TabBarView(
-                controller: _tabCtrl,
-                children: [
-                  if (_paymentMode == 0)
-                    _MonthlyTab(
-                      groupId: groupId, year: _year, isAdmin: isAdmin,
-                      onYearChanged:        (y) => setState(() => _year = y),
-                      onOpenSheet:          (ctx, row, month) =>
-                          _openMonthlySheet(ctx, row, month),
-                      onToggleGoalkeeper:   isAdmin ? _toggleGoalkeeper : null,
+              child: _showCaixa
+                  ? _CaixaView(
+                      groupId:    groupId,
+                      isDark:     isDark,
+                      subTab:     _caixaSubTab,
+                      txYear:     _txYear,
+                      txMonth:    _txMonth,
+                      onSubTab:   (s) => setState(() => _caixaSubTab = s),
+                      onTxYear:   (y) => setState(() => _txYear = y),
+                      onTxMonth:  (m) => setState(() => _txMonth = m),
+                    )
+                  : TabBarView(
+                      controller: _tabCtrl,
+                      children: [
+                        if (_paymentMode == 0)
+                          _MonthlyTab(
+                            groupId: groupId, year: _year, isAdmin: isAdmin,
+                            onYearChanged:        (y) => setState(() => _year = y),
+                            onOpenSheet:          (ctx, row, month) =>
+                                _openMonthlySheet(ctx, row, month),
+                            onToggleGoalkeeper:   isAdmin ? _toggleGoalkeeper : null,
+                          ),
+                        _ExtraTab(
+                          groupId:     groupId,
+                          year:        _extraYear,
+                          month:       _extraMonth,
+                          isAdmin:     isAdmin,
+                          onYearChanged: (y) => setState(() => _extraYear = y),
+                          onMonthChanged: (m) => setState(() => _extraMonth = m),
+                          onOpenExtraSheet: (ctx, c, p) => _openExtraSheet(ctx, c, p),
+                          onCreateSheet:    (ctx, players) =>
+                              _openCreateSheet(ctx, players),
+                          onBulkSheet:      (ctx, c) => _openBulkSheet(ctx, c),
+                          onCancel:         (ctx, id) => _cancelCharge(ctx, id),
+                          onRefresh:        _refreshExtra,
+                        ),
+                      ],
                     ),
-                  _ExtraTab(
-                    groupId:     groupId,
-                    year:        _extraYear,
-                    month:       _extraMonth,
-                    isAdmin:     isAdmin,
-                    onYearChanged: (y) => setState(() => _extraYear = y),
-                    onMonthChanged: (m) => setState(() => _extraMonth = m),
-                    onOpenExtraSheet: (ctx, c, p) => _openExtraSheet(ctx, c, p),
-                    onCreateSheet:    (ctx, players) =>
-                        _openCreateSheet(ctx, players),
-                    onBulkSheet:      (ctx, c) => _openBulkSheet(ctx, c),
-                    onCancel:         (ctx, id) => _cancelCharge(ctx, id),
-                    onRefresh:        _refreshExtra,
-                  ),
-                ],
-              ),
             ),
           ],
         ),
@@ -360,17 +381,729 @@ class _PaymentsPageState extends ConsumerState<PaymentsPage>
           child: const Icon(Icons.payments_outlined, size: 26, color: Colors.white),
         ),
         const SizedBox(width: 14),
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Pagamentos',
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Pagamentos',
+                style: TextStyle(
+                    color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
+            Text('Mensalidades e cobranças extras',
+                style: TextStyle(
+                    color: Colors.white.withValues(alpha: .5), fontSize: 12)),
+          ]),
+        ),
+        // Botão Caixa (só financeiro/admin)
+        if (_isPaymentAdmin)
+          GestureDetector(
+            onTap: () => setState(() => _showCaixa = !_showCaixa),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: _showCaixa
+                    ? Colors.white
+                    : Colors.white.withValues(alpha: .15),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                    color: Colors.white.withValues(alpha: _showCaixa ? 1 : .3)),
+              ),
+              child: Text('🏦 Caixa',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: _showCaixa ? const Color(0xFF0F172A) : Colors.white,
+                  )),
+            ),
+          ),
+      ]),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CAIXA
+// ══════════════════════════════════════════════════════════════════════════════
+
+const _kMonthNames = [
+  'Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+  'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro',
+];
+const _kMonthShort = [
+  'Jan','Fev','Mar','Abr','Mai','Jun',
+  'Jul','Ago','Set','Out','Nov','Dez',
+];
+const _kCategoryNames = [
+  'Aluguel','Bola','Colete','Árbitro','Transporte','Lanche','Outro',
+];
+
+class _CaixaView extends ConsumerStatefulWidget {
+  final String   groupId;
+  final bool     isDark;
+  final String   subTab;
+  final int      txYear, txMonth;
+  final void Function(String) onSubTab;
+  final void Function(int)    onTxYear;
+  final void Function(int)    onTxMonth;
+
+  const _CaixaView({
+    required this.groupId, required this.isDark,
+    required this.subTab,  required this.txYear, required this.txMonth,
+    required this.onSubTab, required this.onTxYear, required this.onTxMonth,
+  });
+
+  @override
+  ConsumerState<_CaixaView> createState() => _CaixaViewState();
+}
+
+class _CaixaViewState extends ConsumerState<_CaixaView> {
+  List<TransactionDto>             _transactions = [];
+  List<TransactionMonthSummaryDto> _summaries    = [];
+  PendingTotalsDto?                _pending;
+  bool   _loading  = false;
+  bool   _syncing  = false;
+  bool   _clearing = false;
+  String? _error;
+
+  TransactionsRemoteDataSource get _ds => ref.read(transactionsDsProvider);
+
+  @override
+  void initState() {
+    super.initState();
+    // initState é síncrono; usamos addPostFrameCallback para acessar ref
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  @override
+  void didUpdateWidget(_CaixaView old) {
+    super.didUpdateWidget(old);
+    if (old.subTab != widget.subTab ||
+        old.txYear != widget.txYear ||
+        old.txMonth != widget.txMonth) {
+      _load();
+    }
+  }
+
+  Future<void> _load() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      if (widget.subTab == 'mes') {
+        final results = await Future.wait([
+          _ds.getByMonth(widget.groupId, widget.txYear, widget.txMonth),
+          _ds.getPendingTotals(widget.groupId),
+        ]);
+        if (mounted) setState(() {
+          _transactions = results[0] as List<TransactionDto>;
+          _pending      = results[1] as PendingTotalsDto?;
+        });
+      } else {
+        final results = await Future.wait([
+          _ds.getMonthlySummaries(widget.groupId),
+          _ds.getPendingTotals(widget.groupId),
+        ]);
+        if (mounted) setState(() {
+          _summaries = results[0] as List<TransactionMonthSummaryDto>;
+          _pending   = results[1] as PendingTotalsDto?;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _sync() async {
+    setState(() => _syncing = true);
+    try {
+      await _ds.syncTransactions(widget.groupId);
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Caixa sincronizado!')));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro: $e'), backgroundColor: AppColors.rose500));
+    } finally {
+      if (mounted) setState(() => _syncing = false);
+    }
+  }
+
+  Future<void> _clearCaixa() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Limpar caixa'),
+        content: const Text('Remove todos os lançamentos para re-sincronizar do zero.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.rose500),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Limpar'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _clearing = true);
+    try {
+      await _ds.clearAllTransactions(widget.groupId);
+      await _load();
+    } catch (_) {} finally {
+      if (mounted) setState(() => _clearing = false);
+    }
+  }
+
+  Future<void> _addTransaction(int type) async {
+    final isDark = widget.isDark;
+    final amtCtrl  = TextEditingController();
+    final descCtrl = TextEditingController();
+    final dateCtrl = TextEditingController(
+        text: '${widget.txYear}-${widget.txMonth.toString().padLeft(2,'0')}-01');
+    int? category;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          title: Text(type == 0 ? '+ Entrada' : '- Saída'),
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(controller: amtCtrl,
+                  keyboardType: TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                      labelText: 'Valor (R\$)', prefixText: 'R\$ ')),
+              const SizedBox(height: 12),
+              TextField(controller: descCtrl,
+                  decoration: const InputDecoration(labelText: 'Descrição')),
+              const SizedBox(height: 12),
+              TextField(controller: dateCtrl,
+                  decoration: const InputDecoration(
+                      labelText: 'Data', hintText: 'AAAA-MM-DD')),
+              if (type == 1) ...[
+                const SizedBox(height: 12),
+                DropdownButtonFormField<int>(
+                  decoration: const InputDecoration(labelText: 'Categoria'),
+                  value: category,
+                  items: List.generate(_kCategoryNames.length, (i) =>
+                      DropdownMenuItem(value: i, child: Text(_kCategoryNames[i]))),
+                  onChanged: (v) => setS(() => category = v),
+                ),
+              ],
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancelar')),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                  backgroundColor: type == 0 ? AppColors.green600 : AppColors.rose500),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Salvar'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final amount = double.tryParse(amtCtrl.text.replaceAll(',', '.'));
+    if (amount == null || amount <= 0) return;
+    if (descCtrl.text.trim().isEmpty) return;
+
+    try {
+      await _ds.createTransaction(widget.groupId, CreateTransactionDto(
+        type:        type,
+        amount:      amount,
+        description: descCtrl.text.trim(),
+        date:        dateCtrl.text.trim(),
+        category:    type == 1 ? category : null,
+      ));
+      await _load();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro: $e'), backgroundColor: AppColors.rose500));
+    }
+  }
+
+  Future<void> _deleteTransaction(String id) async {
+    try {
+      await _ds.deleteTransaction(widget.groupId, id);
+      await _load();
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = widget.isDark;
+    final p = _pending;
+
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+
+          // ── Pendências em aberto ─────────────────────────────────────
+          if (p != null && p.grandTotal > 0)
+            Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color:        isDark ? const Color(0xFF3D2E00) : const Color(0xFFFFFBEB),
+                borderRadius: BorderRadius.circular(12),
+                border:       Border.all(color: AppColors.amber200),
+              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  const Icon(Icons.account_balance_wallet_outlined,
+                      size: 15, color: AppColors.amber500),
+                  const SizedBox(width: 6),
+                  Text('Pendências em aberto',
+                      style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w600,
+                        color: AppColors.amber500,
+                      )),
+                ]),
+                const SizedBox(height: 8),
+                Row(children: [
+                  if (p.totalMonthlyPending > 0)
+                    Expanded(child: _PendItem(
+                        label: 'Mensalidades',
+                        value: p.totalMonthlyPending)),
+                  if (p.totalExtraChargesPending > 0)
+                    Expanded(child: _PendItem(
+                        label: 'Cobranças extras',
+                        value: p.totalExtraChargesPending)),
+                  Expanded(child: _PendItem(
+                      label: 'Total pendente',
+                      value: p.grandTotal,
+                      bold: true)),
+                ]),
+              ]),
+            ),
+
+          // ── Sub-tabs + ações ──────────────────────────────────────────
+          Row(children: [
+            _SubTabBtn('📅 Mês',     'mes',   widget.subTab, isDark,
+                () => widget.onSubTab('mes')),
+            const SizedBox(width: 6),
+            _SubTabBtn('📊 Geral',   'geral', widget.subTab, isDark,
+                () => widget.onSubTab('geral')),
+            const Spacer(),
+            _IconBtn(icon: Icons.refresh_rounded,
+                label: 'Sync', loading: _syncing,
+                onTap: _syncing || _clearing ? null : _sync,
+                isDark: isDark),
+            const SizedBox(width: 4),
+            _IconBtn(icon: Icons.delete_outline_rounded,
+                label: 'Limpar', loading: _clearing,
+                color: AppColors.rose500,
+                onTap: _syncing || _clearing ? null : _clearCaixa,
+                isDark: isDark),
+          ]),
+          const SizedBox(height: 16),
+
+          // ── Sub-tab: Mês ─────────────────────────────────────────────
+          if (widget.subTab == 'mes') ...[
+            // Navegação ano/mês
+            _YearRow(year: widget.txYear, isDark: isDark,
+                onPrev: () => widget.onTxYear(widget.txYear - 1),
+                onNext: () => widget.onTxYear(widget.txYear + 1)),
+            const SizedBox(height: 8),
+            _MonthRow(month: widget.txMonth, isDark: isDark,
+                onMonth: widget.onTxMonth),
+            const SizedBox(height: 12),
+
+            // Botões add entrada/saída
+            Row(children: [
+              Expanded(child: FilledButton.icon(
+                style: FilledButton.styleFrom(backgroundColor: AppColors.green600),
+                icon: const Icon(Icons.arrow_upward_rounded, size: 16),
+                label: const Text('Entrada'),
+                onPressed: () => _addTransaction(0),
+              )),
+              const SizedBox(width: 8),
+              Expanded(child: FilledButton.icon(
+                style: FilledButton.styleFrom(backgroundColor: AppColors.rose500),
+                icon: const Icon(Icons.arrow_downward_rounded, size: 16),
+                label: const Text('Saída'),
+                onPressed: () => _addTransaction(1),
+              )),
+            ]),
+            const SizedBox(height: 12),
+
+            if (_loading)
+              const Center(child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: CircularProgressIndicator()))
+            else if (_transactions.isEmpty)
+              _EmptyCaixa(isDark: isDark,
+                  msg: 'Nenhum lançamento em '
+                      '${_kMonthNames[widget.txMonth - 1]}/${widget.txYear}.')
+            else ...[
+              // Resumo do mês
+              _MesSummary(transactions: _transactions, isDark: isDark),
+              const SizedBox(height: 12),
+              // Lista
+              ..._transactions.map((tx) => _TxRow(
+                tx:      tx,
+                isDark:  isDark,
+                onDelete: tx.isAutomatic ? null : () => _deleteTransaction(tx.id),
+              )),
+            ],
+          ],
+
+          // ── Sub-tab: Geral ───────────────────────────────────────────
+          if (widget.subTab == 'geral') ...[
+            if (_loading)
+              const Center(child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: CircularProgressIndicator()))
+            else if (_summaries.isEmpty)
+              _EmptyCaixa(isDark: isDark, msg: 'Nenhum dado disponível.')
+            else
+              ..._summaries.map((s) => _SummaryRow(summary: s, isDark: isDark)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ── Widgets auxiliares do Caixa ───────────────────────────────────────────────
+
+class _PendItem extends StatelessWidget {
+  final String label;
+  final double value;
+  final bool   bold;
+  const _PendItem({required this.label, required this.value, this.bold = false});
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(label, style: const TextStyle(fontSize: 10, color: AppColors.amber500)),
+      Text('R\$ ${value.toStringAsFixed(2)}',
+          style: TextStyle(
+            fontSize: bold ? 15 : 13,
+            fontWeight: bold ? FontWeight.w900 : FontWeight.w700,
+            color: AppColors.amber500,
+          )),
+    ],
+  );
+}
+
+class _SubTabBtn extends StatelessWidget {
+  final String label, value, current;
+  final bool   isDark;
+  final VoidCallback onTap;
+  const _SubTabBtn(this.label, this.value, this.current, this.isDark, this.onTap);
+
+  @override
+  Widget build(BuildContext context) {
+    final active = value == current;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: active
+              ? (isDark ? Colors.white : AppColors.slate900)
+              : (isDark ? AppColors.slate800 : Colors.white),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+              color: active
+                  ? Colors.transparent
+                  : (isDark ? AppColors.slate700 : AppColors.slate200)),
+        ),
+        child: Text(label,
+            style: TextStyle(
+              fontSize: 12, fontWeight: FontWeight.w700,
+              color: active
+                  ? (isDark ? AppColors.slate900 : Colors.white)
+                  : (isDark ? AppColors.slate400 : AppColors.slate600),
+            )),
+      ),
+    );
+  }
+}
+
+class _IconBtn extends StatelessWidget {
+  final IconData     icon;
+  final String       label;
+  final bool         loading;
+  final VoidCallback? onTap;
+  final bool         isDark;
+  final Color?       color;
+  const _IconBtn({required this.icon, required this.label, required this.loading,
+      required this.onTap, required this.isDark, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = color ?? (isDark ? AppColors.slate400 : AppColors.slate500);
+    return GestureDetector(
+      onTap: onTap,
+      child: Opacity(
+        opacity: onTap == null ? .4 : 1,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            border:       Border.all(color: isDark ? AppColors.slate700 : AppColors.slate200),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            loading
+                ? SizedBox(width: 12, height: 12,
+                    child: CircularProgressIndicator(strokeWidth: 1.5, color: c))
+                : Icon(icon, size: 13, color: c),
+            const SizedBox(width: 4),
+            Text(label, style: TextStyle(fontSize: 11, color: c)),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+class _YearRow extends StatelessWidget {
+  final int year; final bool isDark;
+  final VoidCallback onPrev, onNext;
+  const _YearRow({required this.year, required this.isDark,
+      required this.onPrev, required this.onNext});
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      GestureDetector(onTap: onPrev,
+          child: Icon(Icons.chevron_left_rounded, size: 20,
+              color: isDark ? AppColors.slate400 : AppColors.slate500)),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Text('$year',
+            style: TextStyle(
+              fontSize: 14, fontWeight: FontWeight.w700,
+              color: isDark ? AppColors.slate100 : AppColors.slate800,
+            )),
+      ),
+      GestureDetector(onTap: onNext,
+          child: Icon(Icons.chevron_right_rounded, size: 20,
+              color: isDark ? AppColors.slate400 : AppColors.slate500)),
+    ],
+  );
+}
+
+class _MonthRow extends StatelessWidget {
+  final int month; final bool isDark;
+  final void Function(int) onMonth;
+  const _MonthRow({required this.month, required this.isDark, required this.onMonth});
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+    spacing: 4, runSpacing: 4,
+    children: List.generate(12, (i) {
+      final active = i + 1 == month;
+      return GestureDetector(
+        onTap: () => onMonth(i + 1),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 130),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: active
+                ? (isDark ? Colors.white : AppColors.slate900)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+                color: active
+                    ? Colors.transparent
+                    : (isDark ? AppColors.slate700 : AppColors.slate200)),
+          ),
+          child: Text(_kMonthShort[i],
               style: TextStyle(
-                  color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
-          Text('Mensalidades e cobranças extras',
+                fontSize: 11, fontWeight: FontWeight.w600,
+                color: active
+                    ? (isDark ? AppColors.slate900 : Colors.white)
+                    : (isDark ? AppColors.slate400 : AppColors.slate600),
+              )),
+        ),
+      );
+    }),
+  );
+}
+
+class _MesSummary extends StatelessWidget {
+  final List<TransactionDto> transactions;
+  final bool isDark;
+  const _MesSummary({required this.transactions, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    final income  = transactions.where((t) => t.isIncome).fold(0.0, (s, t) => s + t.amount);
+    final expense = transactions.where((t) => !t.isIncome).fold(0.0, (s, t) => s + t.amount);
+    final net     = income - expense;
+    return Row(children: [
+      _SummBox('Entradas', income,  AppColors.green600, isDark),
+      const SizedBox(width: 8),
+      _SummBox('Saídas',   expense, AppColors.rose500,  isDark),
+      const SizedBox(width: 8),
+      _SummBox('Saldo',    net,     net >= 0 ? AppColors.green600 : AppColors.rose500, isDark),
+    ].expand((w) => [w]).toList());
+  }
+}
+
+class _SummBox extends StatelessWidget {
+  final String label; final double value; final Color color; final bool isDark;
+  const _SummBox(this.label, this.value, this.color, this.isDark);
+
+  @override
+  Widget build(BuildContext context) => Expanded(
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color:        color.withValues(alpha: .08),
+        borderRadius: BorderRadius.circular(10),
+        border:       Border.all(color: color.withValues(alpha: .2)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: TextStyle(fontSize: 10, color: color)),
+        const SizedBox(height: 2),
+        Text('R\$ ${value.toStringAsFixed(2)}',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
+      ]),
+    ),
+  );
+}
+
+class _TxRow extends StatelessWidget {
+  final TransactionDto tx;
+  final bool           isDark;
+  final VoidCallback?  onDelete;
+  const _TxRow({required this.tx, required this.isDark, this.onDelete});
+
+  @override
+  Widget build(BuildContext context) {
+    final isIn  = tx.isIncome;
+    final color = isIn ? AppColors.green600 : AppColors.rose500;
+    final bg    = isIn
+        ? (isDark ? const Color(0xFF0D2010) : const Color(0xFFF0FDF4))
+        : (isDark ? const Color(0xFF2D0C0C) : const Color(0xFFFFF1F2));
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color:        bg,
+        borderRadius: BorderRadius.circular(10),
+        border:       Border.all(color: color.withValues(alpha: .2)),
+      ),
+      child: Row(children: [
+        Icon(isIn ? Icons.arrow_circle_up_rounded : Icons.arrow_circle_down_rounded,
+            size: 20, color: color),
+        const SizedBox(width: 10),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(tx.description,
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.white : AppColors.slate900),
+              maxLines: 1, overflow: TextOverflow.ellipsis),
+          Row(children: [
+            Text(
+              tx.date.length >= 10
+                  ? '${tx.date.substring(8,10)}/${tx.date.substring(5,7)}/${tx.date.substring(0,4)}'
+                  : tx.date,
+              style: TextStyle(fontSize: 11,
+                  color: isDark ? AppColors.slate400 : AppColors.slate500)),
+            if (tx.category != null && tx.category! < _kCategoryNames.length) ...[
+              const SizedBox(width: 6),
+              Text(_kCategoryNames[tx.category!],
+                  style: TextStyle(fontSize: 11,
+                      color: isDark ? AppColors.slate500 : AppColors.slate400)),
+            ],
+            if (tx.isAutomatic) ...[
+              const SizedBox(width: 6),
+              Text('auto', style: TextStyle(fontSize: 11, color: AppColors.blue600)),
+            ],
+          ]),
+        ])),
+        Text(
+          '${isIn ? '+' : '-'} R\$ ${tx.amount.toStringAsFixed(2)}',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color),
+        ),
+        if (onDelete != null) ...[
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: onDelete,
+            child: Icon(Icons.close_rounded, size: 16,
+                color: isDark ? AppColors.slate500 : AppColors.slate400),
+          ),
+        ],
+      ]),
+    );
+  }
+}
+
+class _SummaryRow extends StatelessWidget {
+  final TransactionMonthSummaryDto summary;
+  final bool isDark;
+  const _SummaryRow({required this.summary, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    final net = summary.netBalance;
+    final acc = summary.accumulatedBalance;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color:        isDark ? AppColors.slate800 : Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border:       Border.all(
+            color: isDark ? AppColors.slate700 : AppColors.slate200),
+      ),
+      child: Row(children: [
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('${_kMonthNames[summary.month - 1]} ${summary.year}',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.white : AppColors.slate900)),
+          const SizedBox(height: 3),
+          Text('Entradas: R\$ ${summary.totalIncome.toStringAsFixed(2)}   '
+               'Saídas: R\$ ${summary.totalExpense.toStringAsFixed(2)}',
+              style: TextStyle(fontSize: 11,
+                  color: isDark ? AppColors.slate400 : AppColors.slate500)),
+        ])),
+        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          Text('R\$ ${net.toStringAsFixed(2)}',
               style: TextStyle(
-                  color: Colors.white.withValues(alpha: .5), fontSize: 12)),
+                fontSize: 13, fontWeight: FontWeight.w700,
+                color: net >= 0 ? AppColors.green600 : AppColors.rose500,
+              )),
+          Text('Acc: R\$ ${acc.toStringAsFixed(2)}',
+              style: TextStyle(fontSize: 10,
+                  color: isDark ? AppColors.slate400 : AppColors.slate500)),
         ]),
       ]),
     );
   }
+}
+
+class _EmptyCaixa extends StatelessWidget {
+  final bool   isDark;
+  final String msg;
+  const _EmptyCaixa({required this.isDark, required this.msg});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 40),
+    child: Column(children: [
+      Icon(Icons.account_balance_wallet_outlined, size: 36,
+          color: isDark ? AppColors.slate600 : AppColors.slate300),
+      const SizedBox(height: 10),
+      Text(msg, style: TextStyle(fontSize: 13,
+          color: isDark ? AppColors.slate400 : AppColors.slate500),
+          textAlign: TextAlign.center),
+    ]),
+  );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

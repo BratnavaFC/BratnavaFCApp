@@ -103,6 +103,13 @@ class PollDetail extends Equatable {
   final int                totalVoters;
   final List<PollMemberVote>? members; // admin only
 
+  /// Calculado pelo servidor: poll aberta E prazo não vencido.
+  /// Preferir este campo em vez do getter [deadlinePassed] local.
+  final bool isAcceptingVotes;
+
+  /// Id da partida vinculada a esta votação (null = sem vínculo).
+  final String? linkedMatchId;
+
   const PollDetail({
     required this.id,
     required this.title,
@@ -125,14 +132,17 @@ class PollDetail extends Equatable {
     required this.myVotedOptionIds,
     required this.totalVoters,
     this.members,
+    this.isAcceptingVotes = true,
+    this.linkedMatchId,
   });
 
   bool get isOpen  => status == 'open';
-  bool get isEvent => type == 'event';
+  bool get isEvent => type   == 'event';
 
+  /// @deprecated Prefira [isAcceptingVotes] (calculado pelo servidor).
   bool get deadlinePassed {
     if (deadlineDate == null) return false;
-    final time = deadlineTime ?? '23:59';
+    final time     = deadlineTime ?? '23:59';
     final deadline = DateTime.tryParse('${deadlineDate}T$time:00');
     if (deadline == null) return false;
     return DateTime.now().isAfter(deadline);
@@ -166,6 +176,8 @@ class PollDetail extends Equatable {
     members:            (j['members'] as List?)
         ?.map((e) => PollMemberVote.fromJson(e as Map<String, dynamic>))
         .toList(),
+    isAcceptingVotes:   j['isAcceptingVotes'] as bool? ?? (j['status'] == 'open'),
+    linkedMatchId:      (j['linkedMatchId'] ?? j['LinkedMatchId'])?.toString(),
   );
 
   PollDetail copyWith({
@@ -175,6 +187,8 @@ class PollDetail extends Equatable {
     String?                status,
     List<PollMemberVote>?  members,
     List<PollVote>?        votes,
+    bool?                  isAcceptingVotes,
+    String?                linkedMatchId,
   }) => PollDetail(
     id:                 id,
     title:              title,
@@ -197,6 +211,8 @@ class PollDetail extends Equatable {
     myVotedOptionIds:   myVotedOptionIds ?? this.myVotedOptionIds,
     totalVoters:        totalVoters ?? this.totalVoters,
     members:            members ?? this.members,
+    isAcceptingVotes:   isAcceptingVotes ?? this.isAcceptingVotes,
+    linkedMatchId:      linkedMatchId ?? this.linkedMatchId,
   );
 
   @override

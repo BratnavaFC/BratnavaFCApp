@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 import 'current_match.dart';
+import '../../../../core/utils/date_utils.dart';
 
 enum MatchOutcome { win, draw, loss }
 
@@ -9,6 +10,7 @@ class RecentMatch extends Equatable {
   final String      placeName;
   final int         goals;
   final int         assists;
+  final bool        isMvp;
   final MatchOutcome outcome;
   final TeamColor?  myTeamColor;
   final TeamColor?  opponentColor;
@@ -21,6 +23,7 @@ class RecentMatch extends Equatable {
     required this.placeName,
     required this.goals,
     required this.assists,
+    this.isMvp = false,
     required this.outcome,
     this.myTeamColor,
     this.opponentColor,
@@ -59,6 +62,7 @@ class RecentMatch extends Equatable {
       // Aceita tanto playerGoals/playerAssists quanto goals/assists
       goals:   (j['playerGoals']   ?? j['goals'])   as int? ?? 0,
       assists: (j['playerAssists'] ?? j['assists']) as int? ?? 0,
+      isMvp:   j['isMvp'] as bool? ?? j['IsMvp'] as bool? ?? false,
       outcome: outcome,
       myTeamColor: parseColor(
         myTeam == 1 ? j['teamAColor'] : j['teamBColor'],
@@ -79,11 +83,4 @@ class RecentMatch extends Equatable {
   List<Object?> get props => [matchId, playedAt, outcome];
 }
 
-/// Strips timezone suffix, parses as wall-clock time, then subtracts 3 hours
-/// to compensate for the backend always returning times 3 hours ahead (UTC vs UTC-3).
-DateTime _parseDate(String? s) {
-  if (s == null || s.isEmpty) return DateTime.now();
-  final bare = s.replaceFirst(RegExp(r'Z$|[+-]\d{2}:\d{2}$'), '');
-  final dt = DateTime.tryParse(bare) ?? DateTime.now();
-  return dt.subtract(const Duration(hours: 3));
-}
+DateTime _parseDate(String? s) => parseApiDate(s);

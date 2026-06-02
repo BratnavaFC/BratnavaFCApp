@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../../core/auth/jwt_helper.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/providers/core_providers.dart';
 import '../../domain/entities/account.dart';
@@ -66,9 +67,14 @@ class AccountStore extends StateNotifier<AccountState> {
           .toList();
 
       // Remove sessões com "manter logado" desmarcado — sempre desloga ao reiniciar.
-      // Remove também sessões mantidas mas com token já expirado (sem refresh token válido).
+      // Remove sessões cujos tokens estão ambos expirados — entrar no app com tokens
+      // mortos causa um cascade de 401s que tenta navegar para /login de dentro de
+      // handlers Dio ativos, podendo crashar o engine Flutter.
       final activeList = list.where((a) {
         if (!a.keepLoggedIn) return false;
+        final accessExpired  = a.accessToken.isEmpty  || JwtHelper.isExpired(a.accessToken);
+        final refreshExpired = a.refreshToken.isEmpty || JwtHelper.isExpired(a.refreshToken);
+        if (accessExpired && refreshExpired) return false;
         return true;
       }).toList();
 

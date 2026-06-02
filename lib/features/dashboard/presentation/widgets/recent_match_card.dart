@@ -186,6 +186,31 @@ class RecentMatchCard extends ConsumerWidget {
                               ),
                             ),
 
+                            // Badge MVP (usa ícone configurado pelo grupo)
+                            if (match.isMvp)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color:        const Color(0xFFFFFBEB),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border:       Border.all(color: AppColors.amber200),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    renderGroupIcon(icons.mvp, size: 10,
+                                        color: AppColors.amber500),
+                                    const SizedBox(width: 3),
+                                    const Text('MVP',
+                                      style: TextStyle(
+                                        fontSize:   10,
+                                        fontWeight: FontWeight.w600,
+                                        color:      AppColors.amber500,
+                                      )),
+                                  ],
+                                ),
+                              ),
+
                             // Gols
                             if (canSeeStats && match.goals > 0)
                               Row(

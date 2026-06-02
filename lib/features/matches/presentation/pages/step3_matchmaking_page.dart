@@ -302,6 +302,9 @@ class _Step3State extends ConsumerState<Step3MatchmakingPage> {
                 s:       s,
                 isAdmin: _isAdmin,
                 isDark:  isDark,
+                onNoShow: (matchPlayerId, noShow) => ref
+                    .read(matchNotifierProvider.notifier)
+                    .setNoShow(matchPlayerId, noShow),
               ),
               const SizedBox(height: 12),
               if (_isAdmin) ...[
@@ -577,22 +580,28 @@ class _TeamGenOptionsSectionState extends ConsumerState<_TeamGenOptionsSection> 
             ],
           ),
 
+
           if (widget.isAdmin) ...[
             const SizedBox(height: 10),
 
             // ── Botões mover / trocar ─────────────────────────────────────
             Builder(builder: (context) {
-              final canMoveToA = _selectedB != null && _selectedA == null;
-              final canMoveToB = _selectedA != null && _selectedB == null;
-              final canSwap    = _selectedA != null && _selectedB != null;
+              final canMoveToA  = _selectedB != null && _selectedA == null;
+              final canMoveToB  = _selectedA != null && _selectedB == null;
+              final canSwap     = _selectedA != null && _selectedB != null;
+              // Fallback visual para cores claras
+              final uiA = aColor.computeLuminance() > 0.7 ? AppColors.slate600 : aColor;
+              final uiB = bColor.computeLuminance() > 0.7 ? AppColors.slate600 : bColor;
               return Row(
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: aColor,
+                        foregroundColor: canMoveToA ? uiA : AppColors.slate400,
+                        backgroundColor: canMoveToA ? uiA.withValues(alpha: 0.08) : null,
                         side: BorderSide(
-                          color: canMoveToA ? aColor : aColor.withValues(alpha: 0.25),
+                          color: canMoveToA ? uiA : AppColors.slate300,
+                          width: canMoveToA ? 1.5 : 1,
                         ),
                         padding: const EdgeInsets.symmetric(vertical: 8),
                       ),
@@ -618,9 +627,11 @@ class _TeamGenOptionsSectionState extends ConsumerState<_TeamGenOptionsSection> 
                   Expanded(
                     child: OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: bColor,
+                        foregroundColor: canMoveToB ? uiB : AppColors.slate400,
+                        backgroundColor: canMoveToB ? uiB.withValues(alpha: 0.08) : null,
                         side: BorderSide(
-                          color: canMoveToB ? bColor : bColor.withValues(alpha: 0.25),
+                          color: canMoveToB ? uiB : AppColors.slate300,
+                          width: canMoveToB ? 1.5 : 1,
                         ),
                         padding: const EdgeInsets.symmetric(vertical: 8),
                       ),
@@ -704,8 +715,143 @@ class _AssignedTeamsSection extends StatelessWidget {
   final MatchState s;
   final bool isAdmin;
   final bool isDark;
+  final void Function(String matchPlayerId, bool noShow)? onNoShow;
 
-  const _AssignedTeamsSection({required this.s, required this.isAdmin, required this.isDark});
+  const _AssignedTeamsSection({
+    required this.s,
+    required this.isAdmin,
+    required this.isDark,
+    this.onNoShow,
+  });
+
+  static String _initial(String name) {
+    final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return '?';
+    if (parts.length == 1) return parts[0][0].toUpperCase();
+    return (parts[0][0] + parts.last[0]).toUpperCase();
+  }
+
+  Widget _buildPlayerList(List<MatchPlayerInfo> players, Color color, String teamName) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 10, height: 10,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: color,
+                  border: Border.all(
+                    color: color.computeLuminance() > 0.7
+                        ? AppColors.slate400
+                        : Colors.transparent,
+                    width: 1,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  teamName,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700, fontSize: 13,
+                    color: isDark ? AppColors.slate100 : AppColors.slate900,
+                  ),
+                ),
+              ),
+              Icon(Icons.sports_soccer, size: 13, color: color.withValues(alpha: 0.7)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
+        ...players.map((p) {
+          final absent = p.didNotPlay;
+          return Container(
+            margin: const EdgeInsets.symmetric(vertical: 2),
+            padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 4),
+            decoration: BoxDecoration(
+              color: absent ? AppColors.rose50.withValues(alpha: isDark ? 0.1 : 1) : Colors.transparent,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 24, height: 24,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: absent
+                        ? AppColors.rose200.withValues(alpha: 0.4)
+                        : color.withValues(alpha: 0.15),
+                  ),
+                  child: Center(
+                    child: Text(
+                      _initial(p.playerName),
+                      style: TextStyle(
+                        fontSize: 9, fontWeight: FontWeight.w700,
+                        color: absent ? AppColors.rose400 : color,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        p.playerName,
+                        style: TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.w500,
+                          color: absent
+                              ? (isDark ? AppColors.slate500 : AppColors.slate400)
+                              : (isDark ? AppColors.slate100 : AppColors.slate800),
+                          decoration: absent ? TextDecoration.lineThrough : null,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (p.isGoalkeeper)
+                        const Text('Goleiro', style: TextStyle(fontSize: 9, color: AppColors.slate400)),
+                    ],
+                  ),
+                ),
+                if (isAdmin && onNoShow != null)
+                  GestureDetector(
+                    onTap: () => onNoShow!(p.matchPlayerId, !absent),
+                    child: Tooltip(
+                      message: absent ? 'Marcar como presente' : 'Marcar como não foi',
+                      child: Container(
+                        width: 26, height: 26,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: absent
+                              ? AppColors.rose50.withValues(alpha: isDark ? 0.15 : 1)
+                              : (isDark ? AppColors.slate800 : AppColors.slate100),
+                          border: Border.all(
+                            color: absent ? AppColors.rose200 : (isDark ? AppColors.slate600 : AppColors.slate300),
+                          ),
+                        ),
+                        child: Icon(
+                          absent ? Icons.person_off_rounded : Icons.person_rounded,
+                          size: 13,
+                          color: absent ? AppColors.rose400 : (isDark ? AppColors.slate400 : AppColors.slate500),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -719,24 +865,121 @@ class _AssignedTeamsSection extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(child: _TeamPlayerList(
-            teamName: aName,
-            color:    aColor,
-            players:  s.teamAPlayers.map((p) => TeamGenPlayer(
-              playerId: p.playerId, name: p.playerName,
-              isGoalkeeper: p.isGoalkeeper, weight: 0,
-            )).toList(),
-            isDark: isDark,
-          )),
+          Expanded(child: _buildPlayerList(s.teamAPlayers, aColor, aName)),
           const SizedBox(width: 8),
-          Expanded(child: _TeamPlayerList(
-            teamName: bName,
-            color:    bColor,
-            players:  s.teamBPlayers.map((p) => TeamGenPlayer(
-              playerId: p.playerId, name: p.playerName,
-              isGoalkeeper: p.isGoalkeeper, weight: 0,
-            )).toList(),
-            isDark: isDark,
+          Expanded(child: _buildPlayerList(s.teamBPlayers, bColor, bName)),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Sem time (times já atribuídos) ───────────────────────────────────────────
+
+class _UnassignedSection extends StatelessWidget {
+  final List<MatchPlayerInfo> players;
+  final bool isAdmin;
+  final bool isDark;
+  final String teamALabel;
+  final String teamBLabel;
+  final Color? teamAColor;
+  final Color? teamBColor;
+  final void Function(String pid, bool toA) onAssign;
+
+  const _UnassignedSection({
+    required this.players,
+    required this.isAdmin,
+    required this.isDark,
+    required this.onAssign,
+    this.teamALabel = 'A',
+    this.teamBLabel = 'B',
+    this.teamAColor,
+    this.teamBColor,
+  });
+
+  static String _initial(String name) {
+    final parts = name.trim().split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
+    if (parts.isEmpty) return '?';
+    return parts[0][0].toUpperCase();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorA = teamAColor ?? AppColors.blue500;
+    final colorB = teamBColor ?? AppColors.slate400;
+    return _SectionCard(
+      isDark: isDark,
+      borderColor: isDark
+          ? AppColors.amber400.withValues(alpha: 0.35)
+          : AppColors.amber200,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header com ícone amber
+          Row(
+            children: [
+              const Icon(Icons.person_off_outlined, size: 15, color: AppColors.amber500),
+              const SizedBox(width: 6),
+              Text(
+                'Não atribuídos (${players.length})',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                  color: AppColors.amber500,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ...players.map((p) => Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(
+              children: [
+                // Avatar amber
+                Container(
+                  width: 26, height: 26,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.amber200,
+                  ),
+                  child: Center(
+                    child: Text(
+                      _initial(p.playerName),
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.amber500,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        p.playerName,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: isDark ? AppColors.slate100 : AppColors.slate800,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (p.isGoalkeeper)
+                        const Text('Goleiro', style: TextStyle(fontSize: 9, color: AppColors.slate400)),
+                    ],
+                  ),
+                ),
+                if (isAdmin) ...[
+                  const SizedBox(width: 6),
+                  _AssignButton(label: '→ $teamALabel', color: colorA, onTap: () => onAssign(p.playerId, true)),
+                  const SizedBox(width: 4),
+                  _AssignButton(label: '→ $teamBLabel', color: colorB, onTap: () => onAssign(p.playerId, false)),
+                ],
+              ],
+            ),
           )),
         ],
       ),
@@ -744,56 +987,146 @@ class _AssignedTeamsSection extends StatelessWidget {
   }
 }
 
-// ── Sem time ──────────────────────────────────────────────────────────────────
+// ── Sem time (opções geradas) ─────────────────────────────────────────────────
 
-class _UnassignedSection extends StatelessWidget {
-  final List<MatchPlayerInfo> players;
+class _UnassignedGenSection extends StatelessWidget {
+  final List<TeamGenPlayer> players;
   final bool isAdmin;
   final bool isDark;
+  final String teamALabel;
+  final String teamBLabel;
+  final Color teamAColor;
+  final Color teamBColor;
   final void Function(String pid, bool toA) onAssign;
 
-  const _UnassignedSection({
-    required this.players, required this.isAdmin,
-    required this.isDark,  required this.onAssign,
+  const _UnassignedGenSection({
+    required this.players,
+    required this.isAdmin,
+    required this.isDark,
+    required this.teamALabel,
+    required this.teamBLabel,
+    required this.teamAColor,
+    required this.teamBColor,
+    required this.onAssign,
   });
+
+  static String _initial(String name) {
+    final parts = name.trim().split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
+    if (parts.isEmpty) return '?';
+    return parts[0][0].toUpperCase();
+  }
 
   @override
   Widget build(BuildContext context) {
     return _SectionCard(
       isDark: isDark,
+      borderColor: isDark
+          ? AppColors.amber400.withValues(alpha: 0.35)
+          : AppColors.amber200,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Sem time (${players.length})',
-            style: TextStyle(
-              fontWeight: FontWeight.w600, fontSize: 13,
-              color: isDark ? AppColors.slate300 : AppColors.slate600,
-            ),
+          Row(
+            children: [
+              const Icon(Icons.person_off_outlined, size: 15, color: AppColors.amber500),
+              const SizedBox(width: 6),
+              Text(
+                'Não atribuídos (${players.length})',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                  color: AppColors.amber500,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           ...players.map((p) => Padding(
-            padding: const EdgeInsets.only(bottom: 4),
+            padding: const EdgeInsets.only(bottom: 6),
             child: Row(
               children: [
-                Expanded(child: Text(p.playerName, style: const TextStyle(fontSize: 13))),
+                Container(
+                  width: 26, height: 26,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.amber200,
+                  ),
+                  child: Center(
+                    child: Text(
+                      _initial(p.name),
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.amber500,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        p.name,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: isDark ? AppColors.slate100 : AppColors.slate800,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (p.isGoalkeeper)
+                        const Text('Goleiro', style: TextStyle(fontSize: 9, color: AppColors.slate400)),
+                    ],
+                  ),
+                ),
+                if (p.weight > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: Text(
+                      p.weight.toStringAsFixed(3),
+                      style: const TextStyle(fontSize: 10, color: AppColors.slate400),
+                    ),
+                  ),
                 if (isAdmin) ...[
-                  TextButton(
-                    onPressed: () => onAssign(p.playerId, true),
-                    style: TextButton.styleFrom(minimumSize: Size.zero, padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4)),
-                    child: const Text('A'),
-                  ),
-                  TextButton(
-                    onPressed: () => onAssign(p.playerId, false),
-                    style: TextButton.styleFrom(minimumSize: Size.zero, padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4)),
-                    child: const Text('B'),
-                  ),
+                  _AssignButton(label: '→ $teamALabel', color: teamAColor, onTap: () => onAssign(p.playerId, true)),
+                  const SizedBox(width: 4),
+                  _AssignButton(label: '→ $teamBLabel', color: teamBColor, onTap: () => onAssign(p.playerId, false)),
                 ],
               ],
             ),
           )),
         ],
       ),
+    );
+  }
+}
+
+// ── Botão de atribuição ───────────────────────────────────────────────────────
+
+class _AssignButton extends StatelessWidget {
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _AssignButton({required this.label, required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final uiColor = color.computeLuminance() > 0.7 ? AppColors.slate600 : color;
+    return OutlinedButton(
+      onPressed: onTap,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: uiColor,
+        backgroundColor: uiColor.withValues(alpha: 0.08),
+        side: BorderSide(color: uiColor, width: 1.5),
+        minimumSize: Size.zero,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+      ),
+      child: Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
     );
   }
 }
@@ -824,6 +1157,11 @@ class _TeamPlayerList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Cores claras (ex: branco) ficam invisíveis — usa slate como fallback visual
+    final isLight    = color.computeLuminance() > 0.7;
+    final uiColor    = isLight ? AppColors.slate600 : color;
+    final dotBorder  = isLight ? AppColors.slate400 : Colors.transparent;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -831,14 +1169,18 @@ class _TeamPlayerList extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.12),
+            color: uiColor.withValues(alpha: 0.10),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
             children: [
               Container(
                 width: 10, height: 10,
-                decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: color,
+                  border: Border.all(color: dotBorder, width: 1),
+                ),
               ),
               const SizedBox(width: 6),
               Expanded(
@@ -850,7 +1192,7 @@ class _TeamPlayerList extends StatelessWidget {
                   ),
                 ),
               ),
-              Icon(Icons.sports_soccer, size: 13, color: color.withValues(alpha: 0.7)),
+              Icon(Icons.sports_soccer, size: 13, color: uiColor.withValues(alpha: 0.7)),
             ],
           ),
         ),
@@ -863,10 +1205,10 @@ class _TeamPlayerList extends StatelessWidget {
               margin: const EdgeInsets.symmetric(vertical: 2),
               padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 4),
               decoration: BoxDecoration(
-                color: isSelected ? color.withValues(alpha: 0.18) : Colors.transparent,
+                color: isSelected ? uiColor.withValues(alpha: 0.12) : Colors.transparent,
                 borderRadius: BorderRadius.circular(6),
                 border: isSelected
-                    ? Border.all(color: color.withValues(alpha: 0.5))
+                    ? Border.all(color: uiColor.withValues(alpha: 0.5))
                     : null,
               ),
               child: Row(
@@ -875,12 +1217,12 @@ class _TeamPlayerList extends StatelessWidget {
                     width: 24, height: 24,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: color.withValues(alpha: isSelected ? 0.35 : 0.15),
+                      color: uiColor.withValues(alpha: isSelected ? 0.25 : 0.12),
                     ),
                     child: Center(
                       child: Text(
                         _initial(p.name),
-                        style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: color),
+                        style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: uiColor),
                       ),
                     ),
                   ),
@@ -936,7 +1278,12 @@ class _ColorChip extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: color!.color,
-            border: Border.all(color: AppColors.slate300),
+            border: Border.all(
+              color: color!.color.computeLuminance() > 0.7
+                  ? AppColors.slate400
+                  : AppColors.slate300,
+              width: 1.5,
+            ),
           ),
         ),
         const SizedBox(width: 6),
@@ -981,7 +1328,12 @@ class _ColorPickerSection extends StatelessWidget {
         Wrap(
           spacing: 6, runSpacing: 6,
           children: colors.take(8).map((c) {
-            final isSel = c.id == selectedId;
+            final isSel   = c.id == selectedId;
+            final isLight = c.color.computeLuminance() > 0.7;
+            final borderColor = isSel
+                ? (isLight ? AppColors.slate600 : AppColors.slate900)
+                : (isLight ? AppColors.slate400 : AppColors.slate300);
+            final checkColor  = isLight ? AppColors.slate800 : Colors.white;
             return GestureDetector(
               onTap: () => onChanged(c.id),
               child: Container(
@@ -989,13 +1341,10 @@ class _ColorPickerSection extends StatelessWidget {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: c.color,
-                  border: Border.all(
-                    color: isSel ? AppColors.slate900 : AppColors.slate300,
-                    width: isSel ? 2 : 1,
-                  ),
+                  border: Border.all(color: borderColor, width: isSel ? 2 : 1.5),
                 ),
                 child: isSel
-                    ? const Icon(Icons.check, size: 14, color: Colors.white)
+                    ? Icon(Icons.check, size: 14, color: checkColor)
                     : null,
               ),
             );
@@ -1006,7 +1355,16 @@ class _ColorPickerSection extends StatelessWidget {
           children: [
             Container(
               width: 10, height: 10,
-              decoration: BoxDecoration(shape: BoxShape.circle, color: selected.color),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: selected.color,
+                border: Border.all(
+                  color: selected.color.computeLuminance() > 0.7
+                      ? AppColors.slate400
+                      : Colors.transparent,
+                  width: 1,
+                ),
+              ),
             ),
             const SizedBox(width: 4),
             Text(selected.name, style: const TextStyle(fontSize: 11, color: AppColors.slate500)),
@@ -1250,8 +1608,9 @@ class _ExpSection extends StatelessWidget {
 class _SectionCard extends StatelessWidget {
   final Widget child;
   final bool isDark;
+  final Color? borderColor;
 
-  const _SectionCard({required this.child, required this.isDark});
+  const _SectionCard({required this.child, required this.isDark, this.borderColor});
 
   @override
   Widget build(BuildContext context) => Container(
@@ -1260,7 +1619,7 @@ class _SectionCard extends StatelessWidget {
       color: isDark ? AppColors.slate900.withValues(alpha: 0.6) : Colors.white,
       borderRadius: BorderRadius.circular(12),
       border: Border.all(
-        color: isDark ? AppColors.slate700.withValues(alpha: 0.6) : AppColors.slate200,
+        color: borderColor ?? (isDark ? AppColors.slate700.withValues(alpha: 0.6) : AppColors.slate200),
       ),
       boxShadow: isDark ? null : [
         BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 4, offset: const Offset(0, 2)),

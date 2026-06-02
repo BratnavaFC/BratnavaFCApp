@@ -4,6 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../dashboard/presentation/providers/dashboard_provider.dart';
+import '../../../matches/domain/entities/match_models.dart';
+import '../../../matches/presentation/providers/match_provider.dart';
 import '../../data/datasources/polls_remote_datasource.dart';
 import '../../domain/entities/poll_detail.dart';
 import '../providers/polls_provider.dart';
@@ -61,6 +64,32 @@ class _PollDetailSheetState extends ConsumerState<PollDetailSheet>
   }
 
   PollsRemoteDataSource get _ds => ref.read(pollsDsProvider);
+
+  Future<void> _linkMatch(String matchId) async {
+    setState(() => _saving = true);
+    try {
+      final ds = ref.read(matchDsProvider);
+      await ds.setLinkedPoll(widget.groupId, matchId, _poll.id);
+      if (mounted) setState(() => _poll = _poll.copyWith(linkedMatchId: matchId));
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _unlinkMatch() async {
+    final matchId = _poll.linkedMatchId;
+    if (matchId == null || matchId.isEmpty) return;
+    setState(() => _saving = true);
+    try {
+      final ds = ref.read(matchDsProvider);
+      await ds.setLinkedPoll(widget.groupId, matchId, null);
+      if (mounted) setState(() => _poll = _poll.copyWith(linkedMatchId: ''));
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
 
   Future<void> _toggleOption(String optId) async {
     if (!_poll.allowMultipleVotes) {
@@ -467,6 +496,19 @@ class _PollDetailSheetState extends ConsumerState<PollDetailSheet>
                       ),
                   ],
 
+                  // ── Vincular partida (admin) ──────────────────────
+                  if (widget.isAdmin) ...[
+                    const SizedBox(height: 20),
+                    _LinkMatchSection(
+                      linkedMatchId: _poll.linkedMatchId,
+                      upcoming:     ref.watch(upcomingMatchesProvider(widget.groupId))
+                                        .valueOrNull ?? [],
+                      isDark:       isDark,
+                      onLink:       _linkMatch,
+                      onUnlink:     _unlinkMatch,
+                    ),
+                  ],
+
                   // ── Admin panel ──
                   if (widget.isAdmin) ...[
                     const SizedBox(height: 20),
@@ -617,6 +659,182 @@ class _OptionTile extends StatelessWidget {
 }
 
 // ── Admin poll panel ───────────────────────────────────────────────────────────
+
+// ── Vincular partida ──────────────────────────────────────────────────────────
+
+class _LinkMatchSection extends StatelessWidget {
+  final String?                 linkedMatchId;
+  final List<MatchHeaderDto>    upcoming;
+  final bool                    isDark;
+  final Future<void> Function(String) onLink;
+  final Future<void> Function()       onUnlink;
+
+  const _LinkMatchSection({
+    required this.linkedMatchId,
+    required this.upcoming,
+    required this.isDark,
+    required this.onLink,
+    required this.onUnlink,
+  });
+
+  void _openPicker(BuildContext ctx) {
+    showModalBottomSheet(
+      context: ctx,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _MatchPickerSheet(
+        matches: upcoming,
+        isDark:  isDark,
+        onPick:  (matchId) { Navigator.pop(ctx); onLink(matchId); },
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasLink = linkedMatchId != null && linkedMatchId!.isNotEmpty;
+
+    MatchHeaderDto? linked;
+    if (hasLink) {
+      try { linked = upcoming.firstWhere((m) => m.matchId == linkedMatchId); }
+      catch (_) {}
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color:        isDark ? AppColors.slate800 : AppColors.slate50,
+        borderRadius: BorderRadius.circular(12),
+        border:       Border.all(
+            color: isDark ? AppColors.slate700 : AppColors.slate200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(Icons.sports_soccer_rounded, size: 16,
+                color: isDark ? AppColors.slate400 : AppColors.slate500),
+            const SizedBox(width: 8),
+            Text('Partida vinculada',
+                style: TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w600,
+                  color: isDark ? AppColors.slate200 : AppColors.slate700,
+                )),
+          ]),
+          const SizedBox(height: 10),
+          if (hasLink)
+            Row(children: [
+              Icon(Icons.link_rounded, size: 13, color: AppColors.emerald500),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  linked != null
+                      ? '${linked.placeName.isNotEmpty ? linked.placeName : 'Partida'}'
+                        ' · ${linked.playedAt.day.toString().padLeft(2,'0')}/'
+                        '${linked.playedAt.month.toString().padLeft(2,'0')}'
+                      : 'Partida vinculada',
+                  style: TextStyle(fontSize: 13,
+                      color: isDark ? AppColors.slate200 : AppColors.slate800),
+                ),
+              ),
+              GestureDetector(
+                onTap: onUnlink,
+                child: Icon(Icons.close_rounded, size: 16,
+                    color: isDark ? AppColors.slate500 : AppColors.slate400),
+              ),
+            ])
+          else
+            GestureDetector(
+              onTap: upcoming.isEmpty ? null : () => _openPicker(context),
+              child: Row(children: [
+                Icon(Icons.add_link_rounded, size: 14,
+                    color: upcoming.isEmpty
+                        ? (isDark ? AppColors.slate700 : AppColors.slate300)
+                        : AppColors.blue600),
+                const SizedBox(width: 6),
+                Text(
+                  upcoming.isEmpty ? 'Nenhuma partida ativa' : 'Vincular a uma partida',
+                  style: TextStyle(fontSize: 13,
+                      color: upcoming.isEmpty
+                          ? (isDark ? AppColors.slate600 : AppColors.slate400)
+                          : AppColors.blue600),
+                ),
+              ]),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MatchPickerSheet extends StatelessWidget {
+  final List<MatchHeaderDto>   matches;
+  final bool                   isDark;
+  final void Function(String)  onPick;
+  const _MatchPickerSheet({required this.matches, required this.isDark, required this.onPick});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.slate900 : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Container(
+          margin: const EdgeInsets.only(top: 12, bottom: 8),
+          width: 36, height: 4,
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.slate700 : AppColors.slate200,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+          child: Text('Vincular a partida',
+              style: TextStyle(
+                fontSize: 15, fontWeight: FontWeight.w700,
+                color: isDark ? Colors.white : AppColors.slate900,
+              )),
+        ),
+        ConstrainedBox(
+          constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.5),
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: matches.length,
+            separatorBuilder: (_, __) => Divider(height: 1,
+                color: isDark ? AppColors.slate800 : AppColors.slate100),
+            itemBuilder: (_, i) {
+              final m = matches[i];
+              final date = '${m.playedAt.day.toString().padLeft(2,'0')}/'
+                           '${m.playedAt.month.toString().padLeft(2,'0')}'
+                           ' ${m.playedAt.hour.toString().padLeft(2,'0')}:'
+                           '${m.playedAt.minute.toString().padLeft(2,'0')}';
+              return ListTile(
+                leading: Icon(Icons.sports_soccer_rounded, size: 20,
+                    color: AppColors.blue600),
+                title: Text(
+                    m.placeName.isNotEmpty ? m.placeName : 'Partida',
+                    style: TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white : AppColors.slate900,
+                    )),
+                subtitle: Text(date,
+                    style: TextStyle(fontSize: 12,
+                        color: isDark ? AppColors.slate400 : AppColors.slate500)),
+                trailing: Icon(Icons.link_rounded, size: 18,
+                    color: isDark ? AppColors.slate500 : AppColors.slate400),
+                onTap: () => onPick(m.matchId),
+              );
+            },
+          ),
+        ),
+        SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
+      ]),
+    );
+  }
+}
 
 class _AdminPollPanel extends StatelessWidget {
   final PollDetail  poll;

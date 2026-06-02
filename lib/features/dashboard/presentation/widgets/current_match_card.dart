@@ -24,8 +24,19 @@ class CurrentMatchCard extends StatelessWidget {
     final isAssigned   = found != null && found.team != 0;
     final isUnassigned = found != null && found.team == 0;
 
-    final teamACount = match.players.where((p) => p.team == 1).length;
-    final teamBCount = match.players.where((p) => p.team == 2).length;
+    final teamAPlayers = match.players.where((p) => p.team == 1).toList();
+    final teamBPlayers = match.players.where((p) => p.team == 2).toList();
+    final teamACount   = teamAPlayers.length;
+    final teamBCount   = teamBPlayers.length;
+
+    // Mostra nomes dos jogadores nas fases de formação e jogo
+    final showPlayerNames = match.stepKey == 'teams' || match.stepKey == 'playing';
+    final teamANames = showPlayerNames
+        ? teamAPlayers.map((p) => p.playerName).where((n) => n.isNotEmpty).toList()
+        : <String>[];
+    final teamBNames = showPlayerNames
+        ? teamBPlayers.map((p) => p.playerName).where((n) => n.isNotEmpty).toList()
+        : <String>[];
 
     final hasScore = match.teamAGoals > 0 || match.teamBGoals > 0 ||
         match.status >= 4; // a partir de "Em jogo" sempre mostra
@@ -106,7 +117,7 @@ class CurrentMatchCard extends StatelessWidget {
                         // Times — Flexible em cada bloco evita overflow horizontal
                         Row(
                           children: [
-                            Flexible(child: _TeamBlock(color: match.teamAColor, label: 'Time A', count: teamACount, isDark: isDark)),
+                            Flexible(child: _TeamBlock(color: match.teamAColor, label: 'Time A', count: teamACount, isDark: isDark, playerNames: teamANames)),
                             Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 8),
                               child: Text(
@@ -118,7 +129,7 @@ class CurrentMatchCard extends StatelessWidget {
                                 ),
                               ),
                             ),
-                            Flexible(child: _TeamBlock(color: match.teamBColor, label: 'Time B', count: teamBCount, isDark: isDark)),
+                            Flexible(child: _TeamBlock(color: match.teamBColor, label: 'Time B', count: teamBCount, isDark: isDark, playerNames: teamBNames)),
                           ],
                         ),
 
@@ -368,16 +379,26 @@ Color? _parseHex(String? hex) {
 // ── TeamBlock ─────────────────────────────────────────────────────────────────
 
 class _TeamBlock extends StatelessWidget {
-  final TeamColor? color;
-  final String     label;
-  final int        count;
-  final bool       isDark;
-  const _TeamBlock({this.color, required this.label, required this.count, required this.isDark});
+  final TeamColor?     color;
+  final String         label;
+  final int            count;
+  final bool           isDark;
+  final List<String>   playerNames;
+
+  const _TeamBlock({
+    this.color,
+    required this.label,
+    required this.count,
+    required this.isDark,
+    this.playerNames = const [],
+  });
 
   @override
   Widget build(BuildContext context) {
+    final showPlayers = playerNames.isNotEmpty;
     return Row(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _ColorDot(hex: color?.hexValue, large: true),
         const SizedBox(width: 8),
@@ -389,19 +410,33 @@ class _TeamBlock extends StatelessWidget {
                 color?.name ?? label,
                 style: TextStyle(
                   fontSize:   12,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w600,
                   color: isDark ? AppColors.slate300 : AppColors.slate700,
                 ),
                 overflow: TextOverflow.ellipsis,
               ),
-              Text(
-                '$count jogador${count != 1 ? "es" : ""}',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: isDark ? AppColors.slate500 : AppColors.slate400,
+              const SizedBox(height: 3),
+              if (showPlayers)
+                ...playerNames.map((name) => Padding(
+                  padding: const EdgeInsets.only(bottom: 1),
+                  child: Text(
+                    name,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark ? AppColors.slate400 : AppColors.slate500,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ))
+              else
+                Text(
+                  '$count jogador${count != 1 ? "es" : ""}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isDark ? AppColors.slate500 : AppColors.slate400,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
-                overflow: TextOverflow.ellipsis,
-              ),
             ],
           ),
         ),

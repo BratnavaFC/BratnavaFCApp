@@ -494,3 +494,178 @@ at:
 #1      Future.any.onValue (dart:async/future.dart:637)
 <asynchronous suspension>
 
+[custom_lint] 2026-05-16T07:25:47.763726 Loading dynamic library failed: %1 is not a valid Win32 application.
+[custom_lint] 2026-05-16T07:25:47.763726  (error code: 193)
+[custom_lint] 2026-05-16T07:25:47.763726
+[custom_lint] 2026-05-16T07:25:47.763726
+[custom_lint] 2026-05-16T07:25:47.765725 lib\custom_lint_client.dart is not an AOT snapshot, it cannot be run with 'dartaotruntime'
+[custom_lint] 2026-05-16T07:25:47.765725
+[custom_lint] 2026-05-16T07:25:47.765725
+Failed to start pluginsThe request analysis.setContextRoots failed with the following error:
+RequestErrorCode.PLUGIN_ERROR
+Bad state: Failed to start the plugins.
+at:
+#0      SocketCustomLintServerToClientChannel._checkInitializationFail.<anonymous closure> (package:custom_lint/src/v2/server_to_client_channel.dart:223)
+<asynchronous suspension>
+#1      Future.any.onValue (dart:async/future.dart:637)
+<asynchronous suspension>
+
+[custom_lint] 2026-05-18T09:28:01.622154 Loading dynamic library failed: %1 is not a valid Win32 application.
+[custom_lint] 2026-05-18T09:28:01.622154  (error code: 193)
+[custom_lint] 2026-05-18T09:28:01.622154
+[custom_lint] 2026-05-18T09:28:01.622154
+[custom_lint] 2026-05-18T09:28:01.632149 lib\custom_lint_client.dart is not an AOT snapshot, it cannot be run with 'dartaotruntime'
+[custom_lint] 2026-05-18T09:28:01.632149
+[custom_lint] 2026-05-18T09:28:01.632149
+Failed to start pluginsThe request analysis.setContextRoots failed with the following error:
+RequestErrorCode.PLUGIN_ERROR
+Bad state: Failed to start the plugins.
+at:
+#0      SocketCustomLintServerToClientChannel._checkInitializationFail.<anonymous closure> (package:custom_lint/src/v2/server_to_client_channel.dart:223)
+<asynchronous suspension>
+#1      Future.any.onValue (dart:async/future.dart:637)
+<asynchronous suspension>
+
+[custom_lint] 2026-05-18T09:28:08.765738 Loading dynamic library failed: %1 is not a valid Win32 application.
+[custom_lint] 2026-05-18T09:28:08.765738  (error code: 193)
+[custom_lint] 2026-05-18T09:28:08.765738
+[custom_lint] 2026-05-18T09:28:08.765738
+[custom_lint] 2026-05-18T09:28:08.767986 lib\custom_lint_client.dart is not an AOT snapshot, it cannot be run with 'dartaotruntime'
+[custom_lint] 2026-05-18T09:28:08.767986
+[custom_lint] 2026-05-18T09:28:08.767986
+Failed to start pluginsThe request analysis.setContextRoots failed with the following error:
+RequestErrorCode.PLUGIN_ERROR
+Bad state: Failed to start the plugins.
+at:
+#0      SocketCustomLintServerToClientChannel._checkInitializationFail.<anonymous closure> (package:custom_lint/src/v2/server_to_client_channel.dart:223)
+<asynchronous suspension>
+#1      Future.any.onValue (dart:async/future.dart:637)
+<asynchronous suspension>
+
+[custom_lint] 2026-05-18T09:54:20.669272 ../../runtime/vm/zone.cc: 96: error: Out of memory.
+[custom_lint] 2026-05-18T09:54:20.669272
+[custom_lint] 2026-05-18T09:54:20.669272
+[custom_lint] 2026-05-18T09:54:20.671261 version=3.11.3 (stable) (Tue Mar 17 01:06:16 2026 -0700) on "windows_x64"
+[custom_lint] 2026-05-18T09:54:20.671261 pid=30972, thread=44236, isolate_group=main(0000015B689216D0), isolate=(nil)(0000000000000000)
+[custom_lint] 2026-05-18T09:54:20.671261 os=windows, arch=x64, comp=no, sim=no
+[custom_lint] 2026-05-18T09:54:20.671261 isolate_instructions=7ff6fe8f83e0, vm_instructions=7ff6fe8f8400
+[custom_lint] 2026-05-18T09:54:20.671261 fp=4a60fde20, sp=4a60fddd8, pc=7ff6febdcca3
+[custom_lint] 2026-05-18T09:54:20.671261
+[custom_lint] 2026-05-18T09:54:20.671261
+[custom_lint] 2026-05-18T09:54:20.684585   pc 0x00007ff6febdcca3 fp 0x00000004a60fde20 Dart_DetectNullSafety+0x2dc1c3
+[custom_lint] 2026-05-18T09:54:20.684585 -- End of DumpStackTrace
+[custom_lint] 2026-05-18T09:54:20.684585 === Crash occurred when compiling package:_fe_analyzer_shared/src/parser/parser_impl.dart_Parser_parseExpressionStatementOrDeclarationAfterModifiers in optimizing JIT mode in AllocateRegisters pass
+[custom_lint] 2026-05-18T09:54:20.684585
+[custom_lint] 2026-05-18T09:54:20.684585
+[custom_lint] 2026-06-01T14:54:08.964040 Loading dynamic library failed: %1 is not a valid Win32 application.
+[custom_lint] 2026-06-01T14:54:08.964040  (error code: 193)
+[custom_lint] 2026-06-01T14:54:08.964040
+[custom_lint] 2026-06-01T14:54:08.964040
+[custom_lint] 2026-06-01T14:54:08.976726 lib\custom_lint_client.dart is not an AOT snapshot, it cannot be run with 'dartaotruntime'
+[custom_lint] 2026-06-01T14:54:08.976726
+[custom_lint] 2026-06-01T14:54:08.976726
+Failed to start pluginsThe request analysis.setContextRoots failed with the following error:
+RequestErrorCode.PLUGIN_ERROR
+Bad state: Failed to start the plugins.
+at:
+#0      SocketCustomLintServerToClientChannel._checkInitializationFail.<anonymous closure> (package:custom_lint/src/v2/server_to_client_channel.dart:223)
+<asynchronous suspension>
+#1      Future.any.onValue (dart:async/future.dart:637)
+<asynchronous suspension>
+
+[custom_lint] 2026-06-01T14:54:56.739538 Loading dynamic library failed: %1 is not a valid Win32 application.
+[custom_lint] 2026-06-01T14:54:56.739538  (error code: 193)
+[custom_lint] 2026-06-01T14:54:56.739538
+[custom_lint] 2026-06-01T14:54:56.739538
+[custom_lint] 2026-06-01T14:54:56.740537 lib\custom_lint_client.dart is not an AOT snapshot, it cannot be run with 'dartaotruntime'
+[custom_lint] 2026-06-01T14:54:56.740537
+[custom_lint] 2026-06-01T14:54:56.740537
+Failed to start pluginsThe request analysis.setContextRoots failed with the following error:
+RequestErrorCode.PLUGIN_ERROR
+Bad state: Failed to start the plugins.
+at:
+#0      SocketCustomLintServerToClientChannel._checkInitializationFail.<anonymous closure> (package:custom_lint/src/v2/server_to_client_channel.dart:223)
+<asynchronous suspension>
+#1      Future.any.onValue (dart:async/future.dart:637)
+<asynchronous suspension>
+
+[custom_lint] 2026-06-01T14:55:17.209101 Loading dynamic library failed: %1 is not a valid Win32 application.
+[custom_lint] 2026-06-01T14:55:17.209101  (error code: 193)
+[custom_lint] 2026-06-01T14:55:17.209101
+[custom_lint] 2026-06-01T14:55:17.209101
+[custom_lint] 2026-06-01T14:55:17.210101 lib\custom_lint_client.dart is not an AOT snapshot, it cannot be run with 'dartaotruntime'
+[custom_lint] 2026-06-01T14:55:17.210101
+[custom_lint] 2026-06-01T14:55:17.210101
+Failed to start pluginsThe request analysis.setContextRoots failed with the following error:
+RequestErrorCode.PLUGIN_ERROR
+Bad state: Failed to start the plugins.
+at:
+#0      SocketCustomLintServerToClientChannel._checkInitializationFail.<anonymous closure> (package:custom_lint/src/v2/server_to_client_channel.dart:223)
+<asynchronous suspension>
+#1      Future.any.onValue (dart:async/future.dart:637)
+<asynchronous suspension>
+
+[custom_lint] 2026-06-01T14:55:41.719611 Loading dynamic library failed: %1 is not a valid Win32 application.
+[custom_lint] 2026-06-01T14:55:41.719611  (error code: 193)
+[custom_lint] 2026-06-01T14:55:41.719611
+[custom_lint] 2026-06-01T14:55:41.719611
+[custom_lint] 2026-06-01T14:55:41.720611 lib\custom_lint_client.dart is not an AOT snapshot, it cannot be run with 'dartaotruntime'
+[custom_lint] 2026-06-01T14:55:41.720611
+[custom_lint] 2026-06-01T14:55:41.720611
+Failed to start pluginsThe request analysis.setContextRoots failed with the following error:
+RequestErrorCode.PLUGIN_ERROR
+Bad state: Failed to start the plugins.
+at:
+#0      SocketCustomLintServerToClientChannel._checkInitializationFail.<anonymous closure> (package:custom_lint/src/v2/server_to_client_channel.dart:223)
+<asynchronous suspension>
+#1      Future.any.onValue (dart:async/future.dart:637)
+<asynchronous suspension>
+
+[custom_lint] 2026-06-01T14:55:51.168542 Loading dynamic library failed: %1 is not a valid Win32 application.
+[custom_lint] 2026-06-01T14:55:51.168542  (error code: 193)
+[custom_lint] 2026-06-01T14:55:51.168542
+[custom_lint] 2026-06-01T14:55:51.168542
+[custom_lint] 2026-06-01T14:55:51.169897 lib\custom_lint_client.dart is not an AOT snapshot, it cannot be run with 'dartaotruntime'
+[custom_lint] 2026-06-01T14:55:51.169897
+[custom_lint] 2026-06-01T14:55:51.169897
+Failed to start pluginsThe request analysis.setContextRoots failed with the following error:
+RequestErrorCode.PLUGIN_ERROR
+Bad state: Failed to start the plugins.
+at:
+#0      SocketCustomLintServerToClientChannel._checkInitializationFail.<anonymous closure> (package:custom_lint/src/v2/server_to_client_channel.dart:223)
+<asynchronous suspension>
+#1      Future.any.onValue (dart:async/future.dart:637)
+<asynchronous suspension>
+
+[custom_lint] 2026-06-02T06:09:18.297608 Loading dynamic library failed: %1 is not a valid Win32 application.
+[custom_lint] 2026-06-02T06:09:18.297608  (error code: 193)
+[custom_lint] 2026-06-02T06:09:18.297608
+[custom_lint] 2026-06-02T06:09:18.297608
+[custom_lint] 2026-06-02T06:09:18.313005 lib\custom_lint_client.dart is not an AOT snapshot, it cannot be run with 'dartaotruntime'
+[custom_lint] 2026-06-02T06:09:18.313005
+[custom_lint] 2026-06-02T06:09:18.313005
+Failed to start pluginsThe request analysis.setContextRoots failed with the following error:
+RequestErrorCode.PLUGIN_ERROR
+Bad state: Failed to start the plugins.
+at:
+#0      SocketCustomLintServerToClientChannel._checkInitializationFail.<anonymous closure> (package:custom_lint/src/v2/server_to_client_channel.dart:223)
+<asynchronous suspension>
+#1      Future.any.onValue (dart:async/future.dart:637)
+<asynchronous suspension>
+
+[custom_lint] 2026-06-02T09:02:25.461926 Loading dynamic library failed: %1 is not a valid Win32 application.
+[custom_lint] 2026-06-02T09:02:25.461926  (error code: 193)
+[custom_lint] 2026-06-02T09:02:25.461926
+[custom_lint] 2026-06-02T09:02:25.461926
+[custom_lint] 2026-06-02T09:02:25.462926 lib\custom_lint_client.dart is not an AOT snapshot, it cannot be run with 'dartaotruntime'
+[custom_lint] 2026-06-02T09:02:25.462926
+[custom_lint] 2026-06-02T09:02:25.462926
+Failed to start pluginsThe request analysis.setContextRoots failed with the following error:
+RequestErrorCode.PLUGIN_ERROR
+Bad state: Failed to start the plugins.
+at:
+#0      SocketCustomLintServerToClientChannel._checkInitializationFail.<anonymous closure> (package:custom_lint/src/v2/server_to_client_channel.dart:223)
+<asynchronous suspension>
+#1      Future.any.onValue (dart:async/future.dart:637)
+<asynchronous suspension>
+

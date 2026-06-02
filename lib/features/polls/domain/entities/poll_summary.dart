@@ -21,6 +21,13 @@ class PollSummary extends Equatable {
   final String? costType;
   final double? costAmount;
 
+  /// Calculado pelo servidor: poll aberta E prazo não vencido.
+  /// Usar este campo em vez do getter [deadlinePassed] local.
+  final bool isAcceptingVotes;
+
+  /// Id da partida vinculada a esta votação/evento (null = sem vínculo).
+  final String? linkedMatchId;
+
   const PollSummary({
     required this.id,
     required this.title,
@@ -41,14 +48,17 @@ class PollSummary extends Equatable {
     this.eventIcon,
     this.costType,
     this.costAmount,
+    this.isAcceptingVotes = true,
+    this.linkedMatchId,
   });
 
-  bool get isOpen => status == 'open';
-  bool get isEvent => type == 'event';
+  bool get isOpen  => status == 'open';
+  bool get isEvent => type   == 'event';
 
+  /// @deprecated Prefira [isAcceptingVotes] (calculado pelo servidor).
   bool get deadlinePassed {
     if (deadlineDate == null) return false;
-    final time = deadlineTime ?? '23:59';
+    final time     = deadlineTime ?? '23:59';
     final deadline = DateTime.tryParse('${deadlineDate}T$time:00');
     if (deadline == null) return false;
     return DateTime.now().isAfter(deadline);
@@ -74,8 +84,10 @@ class PollSummary extends Equatable {
     eventIcon:          j['eventIcon']          as String?,
     costType:           j['costType']           as String?,
     costAmount:         (j['costAmount'] as num?)?.toDouble(),
+    isAcceptingVotes:   j['isAcceptingVotes']   as bool?   ?? (j['status'] == 'open'),
+    linkedMatchId:      (j['linkedMatchId'] ?? j['LinkedMatchId'])?.toString(),
   );
 
   @override
-  List<Object?> get props => [id, status, hasVoted, totalVoters];
+  List<Object?> get props => [id, status, hasVoted, totalVoters, isAcceptingVotes, linkedMatchId];
 }

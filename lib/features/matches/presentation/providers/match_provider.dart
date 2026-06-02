@@ -5,6 +5,7 @@ import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../auth/presentation/providers/account_store.dart';
 import '../../../dashboard/presentation/providers/dashboard_provider.dart';
 import '../../../../core/errors/app_exception.dart';
+import '../../../../core/utils/date_utils.dart';
 import '../../data/datasources/match_remote_datasource.dart';
 import '../../domain/entities/match_models.dart';
 
@@ -57,8 +58,8 @@ class MatchNotifier extends StateNotifier<MatchState> {
         ? MatchStep.fromKey(rawStep.toString())
         : MatchStep.fromStatus((rawStatus as num?)?.toInt() ?? 0);
 
-    final rawDate = d['playedAt'] ?? d['PlayedAt'];
-    final playedAt = rawDate != null ? DateTime.tryParse(rawDate.toString()) : null;
+    final playedAt       = parseApiDateOrNull((d['playedAt']        ?? d['PlayedAt'])?.toString());
+    final actualStartTime = parseApiDateOrNull((d['actualStartTime'] ?? d['ActualStartTime'])?.toString());
 
     state = state.copyWith(
       matchId:   _id(d['matchId'] ?? d['MatchId'] ?? d['id'] ?? d['Id']).isEmpty
@@ -69,6 +70,8 @@ class MatchNotifier extends StateNotifier<MatchState> {
       canRewind: d['canRewind'] as bool? ?? d['CanRewind'] as bool? ?? false,
       teamAGoals: (d['teamAGoals'] ?? d['TeamAGoals']) as int? ?? state.teamAGoals,
       teamBGoals: (d['teamBGoals'] ?? d['TeamBGoals']) as int? ?? state.teamBGoals,
+      linkedPollId: (d['linkedPollId'] ?? d['LinkedPollId'])?.toString(),
+      actualStartTime: actualStartTime ?? state.actualStartTime,
     );
   }
 
@@ -76,11 +79,12 @@ class MatchNotifier extends StateNotifier<MatchState> {
   void _applyAcceptation(Map<String, dynamic>? d) {
     if (d == null) return;
     state = state.copyWith(
-      acceptedPlayers:   _parsePlayers(d['acceptedPlayers'] ?? d['AcceptedPlayers']),
-      rejectedPlayers:   _parsePlayers(d['rejectedPlayers'] ?? d['RejectedPlayers']),
-      pendingPlayers:    _parsePlayers(d['pendingPlayers']  ?? d['PendingPlayers']),
-      maxPlayers:        (d['maxPlayers'] ?? d['MaxPlayers']) as int? ?? state.maxPlayers,
-      acceptedOverLimit: d['acceptedOverLimit'] as bool? ?? d['AcceptedOverLimit'] as bool? ?? false,
+      acceptedPlayers:         _parsePlayers(d['acceptedPlayers'] ?? d['AcceptedPlayers']),
+      rejectedPlayers:         _parsePlayers(d['rejectedPlayers'] ?? d['RejectedPlayers']),
+      pendingPlayers:          _parsePlayers(d['pendingPlayers']  ?? d['PendingPlayers']),
+      maxPlayers:              (d['maxPlayers'] ?? d['MaxPlayers']) as int? ?? state.maxPlayers,
+      acceptedOverLimit:       d['acceptedOverLimit']       as bool? ?? d['AcceptedOverLimit']       as bool? ?? false,
+      canAdvanceToMatchmaking: d['canAdvanceToMatchmaking'] as bool? ?? d['CanAdvanceToMatchmaking'] as bool? ?? false,
     );
   }
 
@@ -95,6 +99,7 @@ class MatchNotifier extends StateNotifier<MatchState> {
       unassignedPlayers: _parsePlayers(d['unassignedPlayers'] ?? d['UnassignedPlayers']),
       participants:      _parsePlayers(d['participants']      ?? d['Participants']),
       colorsLocked:      d['colorsLocked'] as bool? ?? d['ColorsLocked'] as bool? ?? false,
+      canStartMatch:     d['canStartMatch'] as bool? ?? d['CanStartMatch'] as bool? ?? false,
     );
   }
 
@@ -114,6 +119,10 @@ class MatchNotifier extends StateNotifier<MatchState> {
       allVoted:      d['allVoted'] as bool? ?? d['AllVoted'] as bool? ?? false,
       eligibleVoters: _parsePlayers(d['eligibleVoters'] ?? d['EligibleVoters']),
       participants:  _parsePlayers(d['participants'] ?? d['Participants']),
+      canVote:       d['canVote']  as bool? ?? d['CanVote']  as bool?,
+      hasVoted:      d['hasVoted'] as bool? ?? d['HasVoted'] as bool?,
+      myVotedForMatchPlayerId:
+          (d['myVotedForMatchPlayerId'] ?? d['MyVotedForMatchPlayerId'])?.toString(),
     );
   }
 
@@ -156,7 +165,7 @@ class MatchNotifier extends StateNotifier<MatchState> {
     if (groupId.isEmpty) return;
     state = state.copyWith(loading: true, error: null);
     try {
-      // Carrega cores e configurações em paralelo
+      // Carrega cores, configurações e lista de partidas em paralelo
       final results = await Future.wait([
         _ds.fetchTeamColors(groupId).catchError((_) => <TeamColorInfo>[]),
         _ds.fetchGroupSettings(groupId).catchError((_) => null),
@@ -164,16 +173,19 @@ class MatchNotifier extends StateNotifier<MatchState> {
           if (e is DioException && e.response?.statusCode == 404) return null;
           throw e;
         }),
+        _ds.fetchUpcomingMatches(groupId).catchError((_) => <MatchHeaderDto>[]),
       ]);
 
       final colors   = results[0] as List<TeamColorInfo>;
       final settings = results[1] as MatchGroupSettings?;
       final stub     = results[2] as Map<String, dynamic>?;
+      final upcoming = results[3] as List<MatchHeaderDto>;
 
       state = state.copyWith(
-        availableColors: colors,
-        groupSettings:   settings,
-        loading:         false,
+        availableColors:  colors,
+        groupSettings:    settings,
+        upcomingHeaders:  upcoming,
+        loading:          false,
       );
 
       // Pré-preenche local a partir das configurações do grupo
@@ -225,6 +237,50 @@ class MatchNotifier extends StateNotifier<MatchState> {
       }
     } catch (e) {
       state = state.copyWith(loading: false, error: extractDioError(e, 'Falha ao carregar dados.'));
+    }
+  }
+
+  /// Carrega uma partida específica por ID (usado ao navegar do dashboard).
+  Future<void> loadMatchById(String matchId) async {
+    if (groupId.isEmpty || matchId.isEmpty) { await loadInitial(); return; }
+    state = state.copyWith(loading: true, error: null);
+    try {
+      final results = await Future.wait([
+        _ds.fetchTeamColors(groupId).catchError((_) => <TeamColorInfo>[]),
+        _ds.fetchGroupSettings(groupId).catchError((_) => null),
+        _ds.fetchUpcomingMatches(groupId).catchError((_) => <MatchHeaderDto>[]),
+      ]);
+
+      final upcoming = results[2] as List<MatchHeaderDto>;
+      final selIdx   = upcoming.indexWhere((h) => h.matchId == matchId);
+      state = state.copyWith(
+        availableColors:  results[0] as List<TeamColorInfo>,
+        groupSettings:    results[1] as MatchGroupSettings?,
+        upcomingHeaders:  upcoming,
+        matchId:          matchId,
+        selectedMatchIdx: selIdx >= 0 ? selIdx : 0,
+        loading:          false,
+      );
+
+      if ((results[1] as MatchGroupSettings?) != null) {
+        state = state.copyWith(
+            placeName: state.placeName ?? (results[1] as MatchGroupSettings).defaultPlaceName);
+      }
+
+      await _loadStepPayload(matchId, MatchStep.accept);
+
+      if (!isAdmin) {
+        _refreshTimer?.cancel();
+        _refreshTimer = Timer.periodic(
+          const Duration(seconds: 15), (_) => refresh(),
+        );
+      }
+    } on DioException catch (e) {
+      state = state.copyWith(
+          loading: false, error: extractDioError(e, 'Falha ao carregar partida.'));
+    } catch (e) {
+      state = state.copyWith(
+          loading: false, error: extractDioError(e, 'Falha ao carregar dados.'));
     }
   }
 
@@ -347,6 +403,7 @@ class MatchNotifier extends StateNotifier<MatchState> {
     int idx,
     List<TeamGenPlayer> teamA,
     List<TeamGenPlayer> teamB,
+    {List<TeamGenPlayer>? unassigned}
   ) {
     final opts = List<TeamGenOption>.from(state.teamGenOptions);
     if (idx < 0 || idx >= opts.length) return;
@@ -355,7 +412,7 @@ class MatchNotifier extends StateNotifier<MatchState> {
     opts[idx] = TeamGenOption(
       teamA:       teamA,
       teamB:       teamB,
-      unassigned:  opts[idx].unassigned,
+      unassigned:  unassigned ?? opts[idx].unassigned,
       teamAWeight: wA,
       teamBWeight: wB,
       balanceDiff: (wA - wB).abs(),
@@ -658,6 +715,102 @@ class MatchNotifier extends StateNotifier<MatchState> {
 
   /// Limpa o erro exibido.
   void clearError() => state = state.copyWith(error: null);
+
+  // ── Excluir partida ──────────────────────────────────────────────────────
+
+  Future<void> deleteMatch() async {
+    final matchId = state.matchId;
+    if (matchId == null || matchId.isEmpty) return;
+    state = state.copyWith(mutating: true, error: null);
+    try {
+      await _ds.deleteMatch(groupId, matchId);
+      await loadInitial();
+    } catch (e) {
+      state = state.copyWith(
+          mutating: false, error: extractDioError(e, 'Falha ao excluir partida.'));
+    }
+  }
+
+  // ── Multi-match ───────────────────────────────────────────────────────────
+
+  /// Carrega a lista de partidas não-finalizadas.
+  Future<void> loadUpcoming() async {
+    if (groupId.isEmpty) return;
+    try {
+      final headers = await _ds.fetchUpcomingMatches(groupId);
+      state = state.copyWith(upcomingHeaders: headers);
+      // Seleciona a primeira partida se não houver seleção
+      if (headers.isNotEmpty && !state.hasMatch) {
+        await selectMatch(0);
+      }
+    } catch (_) {
+      // best-effort; não bloqueia o carregamento
+    }
+  }
+
+  /// Limpa a seleção atual para permitir criar uma nova partida.
+  void clearSelection() {
+    state = state.copyWith(
+      matchId:          null,
+      step:             MatchStep.create,
+      selectedMatchIdx: -1,
+      linkedPollId:     null,
+      placeName:        state.groupSettings?.defaultPlaceName,
+    );
+  }
+
+  /// Seleciona uma das partidas da lista /upcoming pelo índice.
+  Future<void> selectMatch(int idx) async {
+    final headers = state.upcomingHeaders;
+    if (idx < 0 || idx >= headers.length) return;
+    final header = headers[idx];
+    state = state.copyWith(
+      selectedMatchIdx: idx,
+      matchId:   header.matchId,
+      step:      header.step,
+      placeName: header.placeName,
+      canRewind: header.canRewind,
+      teamAGoals: header.teamAGoals,
+      teamBGoals: header.teamBGoals,
+      linkedPollId: header.linkedPollId,
+      actualStartTime: header.actualStartTime,
+    );
+    await _loadStepPayload(header.matchId, header.step);
+  }
+
+  // ── No-show / DidNotPlay ──────────────────────────────────────────────────
+
+  /// Marca ou desmarca um jogador como "não foi jogar".
+  Future<void> setNoShow(String matchPlayerId, bool didNotPlay) async {
+    final matchId = state.matchId;
+    if (matchId == null) return;
+    state = state.copyWith(mutating: true);
+    try {
+      await _ds.setNoShow(groupId, matchId, matchPlayerId, didNotPlay);
+      await refresh();
+    } catch (e) {
+      state = state.copyWith(error: extractDioError(e, 'Falha ao marcar ausência.'));
+    } finally {
+      state = state.copyWith(mutating: false);
+    }
+  }
+
+  // ── Vínculo Partida ↔ Votação ─────────────────────────────────────────────
+
+  /// Vincula ou desvincula uma votação/evento a esta partida.
+  Future<void> setLinkedPoll(String? pollId) async {
+    final matchId = state.matchId;
+    if (matchId == null) return;
+    state = state.copyWith(mutating: true);
+    try {
+      await _ds.setLinkedPoll(groupId, matchId, pollId);
+      state = state.copyWith(linkedPollId: pollId);
+    } catch (e) {
+      state = state.copyWith(error: extractDioError(e, 'Falha ao vincular votação.'));
+    } finally {
+      state = state.copyWith(mutating: false);
+    }
+  }
 }
 
 // ── Provider ──────────────────────────────────────────────────────────────────

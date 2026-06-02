@@ -7,6 +7,8 @@ typedef TokenHandler = Future<void> Function(String access, String refresh);
 typedef VoidAsync    = Future<void> Function();
 
 class AuthInterceptor extends Interceptor {
+  static const skipUnauthorizedKey = 'skipUnauthorized';
+
   final TokenGetter  getAccessToken;
   final TokenGetter  getRefreshToken;
   final TokenHandler onTokensRefreshed;
@@ -60,6 +62,12 @@ class AuthInterceptor extends Interceptor {
     ErrorInterceptorHandler handler,
   ) async {
     if (err.response?.statusCode == 401) {
+      // Requests marked skipUnauthorized (e.g. push token registration) should
+      // not trigger logout — just reject silently and let the caller handle it.
+      if (err.requestOptions.extra[skipUnauthorizedKey] == true) {
+        return handler.reject(err);
+      }
+
       // If already handling unauthorized (e.g. logout in progress), just reject
       // this request silently — do NOT call onUnauthorized again.
       if (_isHandlingUnauthorized) {

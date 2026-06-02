@@ -3,7 +3,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../domain/entities/absence.dart';
 
 class AbsenceCard extends StatelessWidget {
-  final Absence      absence;
+  final AbsenceDto   absence;
   final bool         canEdit;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
@@ -16,23 +16,33 @@ class AbsenceCard extends StatelessWidget {
     required this.onDelete,
   });
 
+  // absenceType: 1=Viagem, 2=Médico, 3=Pessoal, outros=Outro
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   Color _typeColor() {
-    switch (absence.type) {
-      case AbsenceType.trip:     return AppColors.blue500;
-      case AbsenceType.medical:  return AppColors.rose500;
-      case AbsenceType.personal: return AppColors.amber500;
-      case AbsenceType.other:    return AppColors.slate500;
+    switch (absence.absenceType) {
+      case 1:  return AppColors.blue500;
+      case 2:  return AppColors.rose500;
+      case 3:  return AppColors.amber500;
+      default: return AppColors.slate500;
     }
   }
 
   Color _typeBg(bool isDark) {
-    switch (absence.type) {
-      case AbsenceType.trip:     return isDark ? const Color(0xFF1E3A5F) : const Color(0xFFEFF6FF);
-      case AbsenceType.medical:  return isDark ? const Color(0xFF3D0012) : const Color(0xFFFFF1F2);
-      case AbsenceType.personal: return isDark ? const Color(0xFF3D2E00) : const Color(0xFFFFFBEB);
-      case AbsenceType.other:    return isDark ? AppColors.slate800 : AppColors.slate100;
+    switch (absence.absenceType) {
+      case 1:  return isDark ? const Color(0xFF1E3A5F) : const Color(0xFFEFF6FF);
+      case 2:  return isDark ? const Color(0xFF3D0012) : const Color(0xFFFFF1F2);
+      case 3:  return isDark ? const Color(0xFF3D2E00) : const Color(0xFFFFFBEB);
+      default: return isDark ? AppColors.slate800 : AppColors.slate100;
+    }
+  }
+
+  String _typeEmoji() {
+    switch (absence.absenceType) {
+      case 1:  return '✈️';
+      case 2:  return '🏥';
+      case 3:  return '👤';
+      default: return '📋';
     }
   }
 
@@ -92,7 +102,7 @@ class AbsenceCard extends StatelessWidget {
               ),
               child: Center(
                 child: Text(
-                  absence.type.emoji,
+                  _typeEmoji(),
                   style: const TextStyle(fontSize: 18),
                 ),
               ),
@@ -108,7 +118,7 @@ class AbsenceCard extends StatelessWidget {
 
                   // Type label
                   Text(
-                    absence.displayTypeName,
+                    absence.absenceTypeName,
                     style: TextStyle(
                       color:      textPrimary,
                       fontSize:   14,

@@ -7,13 +7,45 @@ class BetRemoteDataSource {
 
   // ── Endpoints ─────────────────────────────────────────────────────────────
 
-  static String _current(String gid)            => '/api/bet/group/$gid/current';
-  static String _bet(String gid, String mid)    => '/api/bet/group/$gid/match/$mid';
-  static String _leaderboard(String gid)        => '/api/bet/group/$gid/leaderboard';
-  static String _balance(String gid)            => '/api/bet/group/$gid/balance';
-  static String _history(String gid)            => '/api/bet/group/$gid/history';
+  static String _current(String gid)                  => '/api/bet/group/$gid/current';
+  static String _bettable(String gid)                 => '/api/Bet/group/$gid/bettable-matches';
+  static String _context(String gid, String mid)      => '/api/Bet/group/$gid/match/$mid/context';
+  static String _bet(String gid, String mid)          => '/api/bet/group/$gid/match/$mid';
+  static String _leaderboard(String gid)              => '/api/bet/group/$gid/leaderboard';
+  static String _balance(String gid)                  => '/api/bet/group/$gid/balance';
+  static String _history(String gid)                  => '/api/bet/group/$gid/history';
 
-  // ── Current match + my bet ────────────────────────────────────────────────
+  // ── Bettable matches list ─────────────────────────────────────────────────
+
+  Future<List<BettableMatchDto>> fetchBettableMatches(String groupId) async {
+    try {
+      final res = await _dio.get(_bettable(groupId));
+      return _unwrapList(res.data)
+          .whereType<Map<String, dynamic>>()
+          .map(BettableMatchDto.fromJson)
+          .toList();
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return [];
+      rethrow;
+    }
+  }
+
+  // ── Context for a specific match ──────────────────────────────────────────
+
+  Future<CurrentMatchBetContext?> fetchContextForMatch(
+      String groupId, String matchId) async {
+    try {
+      final res  = await _dio.get(_context(groupId, matchId));
+      final data = _unwrapMap(res.data);
+      if (data == null) return null;
+      return CurrentMatchBetContext.fromJson(data);
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
+  // ── Current match + my bet (fallback single-match) ────────────────────────
 
   Future<CurrentMatchBetContext?> fetchCurrent(String groupId) async {
     try {

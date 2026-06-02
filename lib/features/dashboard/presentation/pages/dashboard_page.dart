@@ -1,12 +1,11 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../auth/presentation/providers/account_store.dart';
+import '../../../matches/domain/entities/match_models.dart';
 import '../providers/dashboard_provider.dart';
-import '../widgets/current_match_card.dart';
 import '../widgets/recent_match_card.dart';
 import '../../../payments/presentation/providers/payments_provider.dart';
 import '../../../../core/errors/app_exception.dart';
@@ -19,34 +18,7 @@ class DashboardPage extends ConsumerStatefulWidget {
 }
 
 class _DashboardPageState extends ConsumerState<DashboardPage> {
-  bool   _refreshingMatch  = false;
   bool   _refreshingRecent = false;
-  Timer? _matchTimer;
-
-  @override
-  void initState() {
-    super.initState();
-    // Auto-refresh current match every 30 s so live data stays current.
-    _matchTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      final groupId =
-          ref.read(accountStoreProvider).activeAccount?.activeGroupId ?? '';
-      if (groupId.isNotEmpty) ref.invalidate(currentMatchProvider(groupId));
-    });
-  }
-
-  @override
-  void dispose() {
-    _matchTimer?.cancel();
-    super.dispose();
-  }
-
-  Future<void> _refreshMatch(String groupId) async {
-    if (_refreshingMatch) return;
-    setState(() => _refreshingMatch = true);
-    ref.invalidate(currentMatchProvider(groupId));
-    await Future.delayed(const Duration(milliseconds: 900));
-    if (mounted) setState(() => _refreshingMatch = false);
-  }
 
   Future<void> _refreshRecent(String groupId, String playerId) async {
     if (_refreshingRecent) return;
@@ -65,10 +37,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     // persistido (race condition logo após login com múltiplos grupos)
     final groupId      = account?.activeGroupId ?? activePlayer?.groupId ?? '';
 
-    final currentMatchAsync = groupId.isNotEmpty
-        ? ref.watch(currentMatchProvider(groupId))
-        : null;
-
     final recentAsync = (activePlayer != null && groupId.isNotEmpty)
         ? ref.watch(recentMatchesProvider((groupId: groupId, playerId: activePlayer.playerId)))
         : null;
@@ -85,7 +53,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         onRefresh: () async {
           ref.invalidate(myPlayersProvider);
           if (groupId.isNotEmpty) {
-            ref.invalidate(currentMatchProvider(groupId));
+            ref.invalidate(upcomingMatchesFullProvider(groupId));
+            ref.invalidate(upcomingEventsProvider(groupId));
             if (activePlayer != null) {
               ref.invalidate(recentMatchesProvider(
                   (groupId: groupId, playerId: activePlayer.playerId)));
@@ -100,33 +69,33 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             _DashboardHeader(subtitle: headerSubtitle),
             const SizedBox(height: 16),
 
-            // ── Partida atual ───────────────────────────────────────────────
-            _SectionCard(
-              isDark: isDark,
-              iconBg: const Color(0xFF3B82F6).withValues(alpha: .1),
-              iconColor: AppColors.blue600,
-              iconData: Icons.calendar_today_rounded,
-              title: 'Partida atual',
-              trailing: groupId.isNotEmpty
-                  ? _RefreshBtn(
-                      isLoading: _refreshingMatch,
-                      onTap: () => _refreshMatch(groupId),
-                    )
-                  : null,
-              child: _buildCurrentMatchContent(
-                context, isDark, groupId, currentMatchAsync),
-            ),
-            const SizedBox(height: 16),
+            // ── Próximas partidas ─────────────────────────────────────────────
+            if (groupId.isNotEmpty) ...[
+              _SectionCard(
+                isDark:    isDark,
+                iconBg:    const Color(0xFF3B82F6).withValues(alpha: .1),
+                iconColor: AppColors.blue600,
+                iconData:  Icons.sports_soccer_rounded,
+                title:     'Próximas Partidas',
+                trailing:  _SectionLink(
+                  label: 'Ver tudo',
+                  color: AppColors.blue600,
+                  onTap: () => context.go('/app/matches'),
+                ),
+                child: _UpcomingMatchesCarousel(groupId: groupId, isDark: isDark),
+              ),
+              const SizedBox(height: 16),
+            ],
 
-            // ── Últimas partidas ────────────────────────────────────────────
+            // ── Últimas partidas ─────────────────────────────────────────────
             _SectionCard(
               isDark: isDark,
               iconBg: const Color(0xFF8B5CF6).withValues(alpha: .1),
               iconColor: AppColors.violet600,
               iconData: Icons.history_rounded,
               title: activePlayer != null
-                  ? 'Últimas partidas · ${activePlayer.playerName}'
-                  : 'Últimas partidas',
+                  ? 'Minhas últimas partidas · ${activePlayer.playerName}'
+                  : 'Minhas últimas partidas',
               trailing: (activePlayer != null && groupId.isNotEmpty)
                   ? _RefreshBtn(
                       isLoading: _refreshingRecent,
@@ -137,15 +106,38 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             ),
             const SizedBox(height: 16),
 
-            // ── Situação financeira ─────────────────────────────────────────
+            // ── Situação financeira ───────────────────────────────────────────
             _SectionCard(
               isDark: isDark,
               iconBg: const Color(0xFF16A34A).withValues(alpha: .1),
               iconColor: AppColors.green600,
               iconData: Icons.payments_outlined,
-              title: 'Situação financeira',
+              title: 'Financeiro',
+              trailing: _SectionLink(
+                label: 'Ver',
+                color: AppColors.green600,
+                onTap: () => context.go('/app/payments'),
+              ),
               child: _buildPaymentSummaryContent(context, isDark, groupId),
             ),
+            const SizedBox(height: 16),
+
+            // ── Próximos eventos ─────────────────────────────────────────────
+            if (groupId.isNotEmpty) ...[
+              _SectionCard(
+                isDark:    isDark,
+                iconBg:    const Color(0xFF8B5CF6).withValues(alpha: .1),
+                iconColor: AppColors.violet600,
+                iconData:  Icons.event_rounded,
+                title:     'Próximos Eventos',
+                trailing:  _SectionLink(
+                  label: 'Calendário',
+                  color: AppColors.violet600,
+                  onTap: () => context.go('/app/calendar'),
+                ),
+                child: _UpcomingEventsCarousel(groupId: groupId, isDark: isDark),
+              ),
+            ],
           ],
         ),
       ),
@@ -244,37 +236,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     );
   }
 
-  // ── Partida atual — conteúdo ────────────────────────────────────────────────
-  Widget _buildCurrentMatchContent(
-      BuildContext context, bool isDark, String groupId, AsyncValue? async) {
-    if (groupId.isEmpty) {
-      return _CenteredMsg(
-          msg: 'Crie ou entre em um grupo', isDark: isDark);
-    }
-    if (async == null) return const SizedBox.shrink();
-
-    return async.when(
-      loading: () => const _Skeleton(height: 120),
-      error:   (_, __) => _DashedEmpty(
-        icon: Icons.calendar_today_outlined,
-        title: 'Nenhuma partida em andamento',
-        sub: 'Inicie uma partida na seção Partidas.',
-        isDark: isDark,
-      ),
-      data: (match) => match == null
-          ? _DashedEmpty(
-              icon: Icons.calendar_today_outlined,
-              title: 'Nenhuma partida em andamento',
-              sub: 'Inicie uma partida na seção Partidas.',
-              isDark: isDark,
-            )
-          : CurrentMatchCard(
-              match:    match,
-              playerId: ref.read(activePlayerProvider)?.playerId ?? '',
-            ),
-    );
-  }
-
   // ── Últimas partidas — conteúdo ─────────────────────────────────────────────
   Widget _buildRecentContent(
       BuildContext context, bool isDark, dynamic activePlayer, AsyncValue? async, String groupId) {
@@ -313,6 +274,703 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       },
     );
   }
+}
+
+// ── Helpers compartilhados ────────────────────────────────────────────────────
+
+const _kMonths = [
+  'JAN','FEV','MAR','ABR','MAI','JUN',
+  'JUL','AGO','SET','OUT','NOV','DEZ',
+];
+
+Color? _hexColor(String? hex) {
+  if (hex == null) return null;
+  try { return Color(int.parse('FF${hex.replaceAll('#', '')}', radix: 16)); }
+  catch (_) { return null; }
+}
+
+// ── Dots indicator ────────────────────────────────────────────────────────────
+
+class _DotsIndicator extends StatelessWidget {
+  final int  count;
+  final int  current;
+  final bool isDark;
+  const _DotsIndicator({required this.count, required this.current, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: List.generate(count, (i) {
+      final active = i == current;
+      return AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        margin: const EdgeInsets.symmetric(horizontal: 3),
+        width:  active ? 16 : 6,
+        height: 6,
+        decoration: BoxDecoration(
+          color: active
+              ? AppColors.blue600
+              : (isDark ? AppColors.slate600 : AppColors.slate300),
+          borderRadius: BorderRadius.circular(3),
+        ),
+      );
+    }),
+  );
+}
+
+// ── Carrossel: Próximas Partidas (sem header — header fica no SectionCard) ────
+
+class _UpcomingMatchesCarousel extends ConsumerStatefulWidget {
+  final String groupId;
+  final bool   isDark;
+  const _UpcomingMatchesCarousel({required this.groupId, required this.isDark});
+
+  @override
+  ConsumerState<_UpcomingMatchesCarousel> createState() =>
+      _UpcomingMatchesCarouselState();
+}
+
+class _UpcomingMatchesCarouselState
+    extends ConsumerState<_UpcomingMatchesCarousel> {
+  final _ctrl = PageController();
+  int    _page  = 0;
+  int    _count = 0;
+  Timer? _timer;
+
+  void _startTimer() {
+    _timer?.cancel();
+    if (_count <= 1) return;
+    _timer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (!mounted || !_ctrl.hasClients) return;
+      final next = (_page + 1) % _count;
+      _ctrl.animateToPage(next,
+          duration: const Duration(milliseconds: 400), curve: Curves.easeInOut);
+    });
+  }
+
+  @override
+  void dispose() { _timer?.cancel(); _ctrl.dispose(); super.dispose(); }
+
+  static String _stepLabel(String? key) => switch (key?.toLowerCase()) {
+    'create'                    => 'Criar',
+    'accept' || 'acceptation'   => 'Aceitação',
+    'teams'  || 'matchmaking'   => 'Formação',
+    'playing'|| 'live'          => 'Em jogo',
+    'ended'                     => 'Encerramento',
+    'post'   || 'post_game'     => 'Pós-jogo',
+    'done'   || 'finished' || 'finalized' => 'Finalizada',
+    _                           => key ?? 'Pendente',
+  };
+
+  static Color _stepColor(String? key) => switch (key?.toLowerCase()) {
+    'accept' || 'acceptation'   => AppColors.blue600,
+    'teams'  || 'matchmaking'   => AppColors.orange700,
+    'playing'|| 'live'          => AppColors.emerald500,
+    'ended'                     => AppColors.amber500,
+    'post'   || 'post_game'     => AppColors.violet600,
+    'done'   || 'finished' || 'finalized' => AppColors.slate400,
+    _                           => AppColors.slate400,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final async      = ref.watch(upcomingMatchesFullProvider(widget.groupId));
+    final myPlayerId = ref.watch(activePlayerProvider)?.playerId ?? '';
+    final isDark     = widget.isDark;
+
+    return async.when(
+      loading: () => const _Skeleton(height: 130),
+      error:   (_, __) => _DashedEmpty(
+        icon: Icons.sports_soccer_rounded,
+        title: 'Sem partidas em andamento',
+        sub: 'Inicie uma partida na seção Partidas.',
+        isDark: isDark,
+      ),
+      data: (matches) {
+        if (matches.isEmpty) return _DashedEmpty(
+          icon: Icons.sports_soccer_rounded,
+          title: 'Sem partidas em andamento',
+          sub: 'Inicie uma partida na seção Partidas.',
+          isDark: isDark,
+        );
+        if (_count != matches.length) {
+          _count = matches.length;
+          WidgetsBinding.instance.addPostFrameCallback((_) => _startTimer());
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              height: 130,
+              child: PageView.builder(
+                controller: _ctrl,
+                itemCount: matches.length,
+                onPageChanged: (i) => setState(() => _page = i),
+                itemBuilder: (_, i) => _MatchCard(
+                  match:      matches[i],
+                  myPlayerId: myPlayerId,
+                  isDark:     isDark,
+                  onTap: () => context.go(
+                      '/app/matches?matchId=${matches[i].header.matchId}'),
+                ),
+              ),
+            ),
+            if (matches.length > 1) ...[
+              const SizedBox(height: 8),
+              _DotsIndicator(
+                  count: matches.length, current: _page, isDark: isDark),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+// ── Card de partida upcoming ──────────────────────────────────────────────────
+
+class _MatchCard extends StatelessWidget {
+  final UpcomingMatchDetails match;
+  final String               myPlayerId;
+  final bool                 isDark;
+  final VoidCallback         onTap;
+
+  const _MatchCard({
+    required this.match,
+    required this.myPlayerId,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final h          = match.header;
+    final stepKey    = h.stepKey.toLowerCase();
+    final stepColor  = _UpcomingMatchesCarouselState._stepColor(stepKey);
+    final d          = h.playedAt.toLocal();
+    final me         = match.findPlayer(myPlayerId);
+
+    // Após aceitação fechada, quem não respondeu é exibido como recusado
+    final acceptOpen = stepKey == 'accept' || stepKey == 'acceptation';
+    final effectiveInvite = (me?.inviteResponse == InviteResponse.pending && !acceptOpen)
+        ? InviteResponse.declined
+        : me?.inviteResponse;
+
+    final (statusLabel, statusColor) = me == null
+        ? ('', AppColors.slate400)
+        : switch (effectiveInvite) {
+            InviteResponse.accepted => ('✓ Confirmado',  AppColors.emerald500),
+            InviteResponse.declined => ('✗ Não aceitou', AppColors.rose500),
+            _                       => ('Pendente',       AppColors.amber500),
+          };
+
+    final myTeamColor = me == null ? null
+        : me.team == 1 ? match.teamAColor
+        : me.team == 2 ? match.teamBColor
+        : null;
+
+    final showAcceptCounts = match.allPlayers.isNotEmpty &&
+        (stepKey == 'accept' || stepKey == 'acceptation');
+    final showTeamCounts   = stepKey == 'teams'   || stepKey == 'matchmaking' ||
+                             stepKey == 'playing' || stepKey == 'live';
+    final teamACount       = match.allPlayers.where((p) => p.team == 1).length;
+    final teamBCount       = match.allPlayers.where((p) => p.team == 2).length;
+    final showScore        = h.teamAGoals != null || h.teamBGoals != null;
+    final isLive           = stepKey == 'playing' || stepKey == 'live';
+    final isPost           = stepKey == 'post'    || stepKey == 'post_game' ||
+                             stepKey == 'ended'   || stepKey == 'done' ||
+                             stepKey == 'finished'|| stepKey == 'finalized';
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 1),
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.slate900 : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: isDark ? AppColors.slate700 : AppColors.slate200),
+        ),
+        child: IntrinsicHeight(
+          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            // ── Coluna data (colorida pela etapa) ─────────────────────────
+            Container(
+              width: 60,
+              decoration: BoxDecoration(
+                color: stepColor.withValues(alpha: .08),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(11), bottomLeft: Radius.circular(11)),
+                border: Border(right: BorderSide(color: stepColor.withValues(alpha: .18))),
+              ),
+              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Text(_kMonths[d.month - 1],
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700,
+                        color: stepColor, letterSpacing: 0.5)),
+                Text(d.day.toString().padLeft(2, '0'),
+                    style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, height: 1.0,
+                        color: isDark ? AppColors.slate100 : AppColors.slate900)),
+                Text('${d.hour.toString().padLeft(2,'0')}:${d.minute.toString().padLeft(2,'0')}',
+                    style: TextStyle(fontSize: 10,
+                        color: isDark ? AppColors.slate400 : AppColors.slate500)),
+              ]),
+            ),
+
+            // ── Conteúdo central ──────────────────────────────────────────
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 6, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    // Badge step
+                    Row(children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: stepColor.withValues(alpha: .12),
+                          borderRadius: BorderRadius.circular(5),
+                        ),
+                        child: Text(
+                          _UpcomingMatchesCarouselState._stepLabel(stepKey),
+                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700,
+                              color: stepColor),
+                        ),
+                      ),
+                      if (h.canRewind) ...[
+                        const SizedBox(width: 4),
+                        const Icon(Icons.replay_rounded, size: 11, color: AppColors.slate400),
+                      ],
+                      if (isLive) ...[
+                        const SizedBox(width: 6),
+                        Container(width: 6, height: 6,
+                            decoration: const BoxDecoration(
+                                shape: BoxShape.circle, color: AppColors.emerald500)),
+                      ],
+                    ]),
+
+                    // Nome do local
+                    Text(
+                      h.placeName.isNotEmpty ? h.placeName : 'Partida',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
+                          color: isDark ? AppColors.slate100 : AppColors.slate900),
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                    ),
+
+                    // VOCÊ — status de convite + time
+                    if (me != null)
+                      Row(children: [
+                        Text('VOCÊ',
+                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600,
+                                color: isDark ? AppColors.slate500 : AppColors.slate400)),
+                        if (myTeamColor != null) ...[
+                          const SizedBox(width: 4),
+                          _ColorCircle(hex: myTeamColor.hexValue, size: 9),
+                          const SizedBox(width: 3),
+                          Text(myTeamColor.name,
+                              style: TextStyle(fontSize: 10,
+                                  color: isDark ? AppColors.slate400 : AppColors.slate500)),
+                        ],
+                        if (statusLabel.isNotEmpty) ...[
+                          const SizedBox(width: 5),
+                          Text(statusLabel,
+                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600,
+                                  color: statusColor)),
+                        ],
+                      ]),
+
+                    // Linha do poll/evento vinculado
+                    if (match.linkedEventTitle != null)
+                      Row(children: [
+                        // Emoji do evento (ex: 🌐 ⚽ 🍖) ou ícone fallback de enquete
+                        if (match.linkedEventIcon != null && match.linkedEventIcon!.isNotEmpty)
+                          Text(match.linkedEventIcon!,
+                              style: const TextStyle(fontSize: 11))
+                        else
+                          Icon(
+                            match.linkedIsEvent
+                                ? Icons.public_rounded
+                                : Icons.poll_rounded,
+                            size: 11,
+                            color: isDark ? AppColors.slate500 : AppColors.slate400,
+                          ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            match.linkedEventTitle!,
+                            style: TextStyle(fontSize: 10,
+                                color: isDark ? AppColors.slate400 : AppColors.slate500),
+                            maxLines: 1, overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (match.myVoteText != null) ...[
+                          const SizedBox(width: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: AppColors.emerald500.withValues(alpha: .1),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text('✓ ${match.myVoteText}',
+                                style: const TextStyle(fontSize: 9,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.emerald500)),
+                          ),
+                        ] else ...[
+                          const SizedBox(width: 4),
+                          Text('PENDENTE',
+                              style: const TextStyle(fontSize: 9,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.amber500)),
+                        ],
+                      ]),
+                  ],
+                ),
+              ),
+            ),
+
+            // ── Painel direito: contadores ou placar ──────────────────────
+            SizedBox(
+              width: 52,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    if (isLive && showScore)
+                      Text('${h.teamAGoals ?? 0}×${h.teamBGoals ?? 0}',
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800,
+                              color: AppColors.emerald500))
+                    else if (isPost && showScore)
+                      Text('${h.teamAGoals ?? 0}×${h.teamBGoals ?? 0}',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
+                              color: isDark ? AppColors.slate300 : AppColors.slate700))
+                    else if (showTeamCounts) ...[
+                      _CountChip(
+                        dot: match.teamAColor?.hexValue,
+                        label: match.teamAColor?.name ?? 'Time A',
+                        count: teamACount,
+                        isDark: isDark,
+                      ),
+                      const SizedBox(height: 5),
+                      _CountChip(
+                        dot: match.teamBColor?.hexValue,
+                        label: match.teamBColor?.name ?? 'Time B',
+                        count: teamBCount,
+                        isDark: isDark,
+                      ),
+                    ] else if (showAcceptCounts) ...[
+                      _CountChip(icon: Icons.check_circle_rounded,
+                          count: match.acceptedCount, color: AppColors.emerald500),
+                      const SizedBox(height: 5),
+                      _CountChip(icon: Icons.access_time_rounded,
+                          count: match.pendingCount, color: AppColors.amber500),
+                      if (match.refusedCount > 0) ...[
+                        const SizedBox(height: 5),
+                        _CountChip(icon: Icons.cancel_rounded,
+                            count: match.refusedCount, color: AppColors.rose500),
+                      ],
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Chip de contador (✓2 / ⏰20 / ✗0) ────────────────────────────────────────
+
+class _CountChip extends StatelessWidget {
+  final IconData? icon;
+  final Color?    color;
+  final String?   dot;    // hex color para bolinha de time
+  final String?   label;  // nome do time
+  final int       count;
+  final bool      isDark;
+
+  const _CountChip({
+    this.icon, this.color, this.dot, this.label,
+    required this.count, this.isDark = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final dimColor = isDark ? AppColors.slate400 : AppColors.slate500;
+    if (dot != null) {
+      // Modo time: bolinha + nome abreviado + contagem
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _ColorCircle(hex: dot!, size: 9),
+          const SizedBox(width: 3),
+          Text('$count', style: TextStyle(
+            fontSize: 11, fontWeight: FontWeight.w700, color: dimColor)),
+        ],
+      );
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(width: 13, child: Icon(icon, size: 11, color: color)),
+        SizedBox(
+          width: 22,
+          child: Text('$count',
+            textAlign: TextAlign.right,
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color)),
+        ),
+      ],
+    );
+  }
+}
+
+
+
+// ── Bolinha colorida de time ──────────────────────────────────────────────────
+
+class _ColorCircle extends StatelessWidget {
+  final String hex;
+  final double size;
+  const _ColorCircle({required this.hex, this.size = 12});
+
+  static bool _isLight(Color c) => c.computeLuminance() > 0.7;
+
+  @override
+  Widget build(BuildContext context) {
+    Color? c;
+    try { c = Color(int.parse('0xFF${hex.replaceAll('#', '')}')); } catch (_) {}
+    final isDark  = Theme.of(context).brightness == Brightness.dark;
+    final light   = c != null && _isLight(c);
+    final borderColor = c == null
+        ? Colors.transparent
+        : light
+            ? (isDark ? AppColors.slate500 : AppColors.slate300)
+            : Colors.white.withValues(alpha: .35);
+    return Container(
+      width: size, height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: c ?? (isDark ? AppColors.slate700 : AppColors.slate200),
+        border: Border.all(color: borderColor, width: 1.5),
+      ),
+    );
+  }
+}
+
+// ── Carrossel: Próximos Eventos (sem header) ─────────────────────────────────
+
+class _UpcomingEventsCarousel extends ConsumerStatefulWidget {
+  final String groupId;
+  final bool   isDark;
+  const _UpcomingEventsCarousel({required this.groupId, required this.isDark});
+
+  @override
+  ConsumerState<_UpcomingEventsCarousel> createState() =>
+      _UpcomingEventsCarouselState();
+}
+
+class _UpcomingEventsCarouselState
+    extends ConsumerState<_UpcomingEventsCarousel> {
+  final _ctrl = PageController();
+  int    _page  = 0;
+  int    _count = 0;
+  Timer? _timer;
+
+  void _startTimer() {
+    _timer?.cancel();
+    if (_count <= 1) return;
+    _timer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (!mounted || !_ctrl.hasClients) return;
+      final next = (_page + 1) % _count;
+      _ctrl.animateToPage(next,
+          duration: const Duration(milliseconds: 400), curve: Curves.easeInOut);
+    });
+  }
+
+  @override
+  void dispose() { _timer?.cancel(); _ctrl.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    final async = ref.watch(upcomingEventsProvider(widget.groupId));
+    return async.when(
+      loading: () => const SizedBox.shrink(),
+      error:   (_, __) => const SizedBox.shrink(),
+      data: (events) {
+        if (events.isEmpty) return _DashedEmpty(
+          icon: Icons.event_rounded,
+          title: 'Nenhum evento próximo',
+          sub: 'Eventos dos próximos meses aparecerão aqui.',
+          isDark: widget.isDark,
+        );
+        if (_count != events.length) {
+          _count = events.length;
+          WidgetsBinding.instance.addPostFrameCallback((_) => _startTimer());
+        }
+        final isDark = widget.isDark;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              height: 86,
+              child: PageView.builder(
+                controller: _ctrl,
+                itemCount: events.length,
+                onPageChanged: (i) => setState(() => _page = i),
+                itemBuilder: (context, i) {
+                  final ev       = events[i];
+                  final catColor = _hexColor(ev.categoryColor) ?? AppColors.violet600;
+                  DateTime? d;
+                  try { d = DateTime.parse(ev.date); } catch (_) {}
+
+                  return GestureDetector(
+                    onTap: () => context.go('/app/calendar'),
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 1),
+                      decoration: BoxDecoration(
+                        color: isDark ? AppColors.slate900 : Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: isDark ? AppColors.slate700 : AppColors.slate200,
+                        ),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black.withValues(alpha: .04),
+                              blurRadius: 4, offset: const Offset(0, 2)),
+                        ],
+                      ),
+                      child: Row(children: [
+                        // ── Coluna data ────────────────────────────────────
+                        Container(
+                          width: 64,
+                          decoration: BoxDecoration(
+                            color: catColor.withValues(alpha: .08),
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(13),
+                              bottomLeft: Radius.circular(13),
+                            ),
+                            border: Border(
+                              right: BorderSide(color: catColor.withValues(alpha: .2)),
+                            ),
+                          ),
+                          child: d == null
+                              ? Center(child: Icon(Icons.event_rounded,
+                                  size: 20, color: catColor))
+                              : Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(_kMonths[d.month - 1],
+                                        style: TextStyle(
+                                          fontSize: 10, fontWeight: FontWeight.w700,
+                                          color: catColor, letterSpacing: 0.5,
+                                        )),
+                                    Text(d.day.toString().padLeft(2, '0'),
+                                        style: TextStyle(
+                                          fontSize: 28, fontWeight: FontWeight.w800,
+                                          height: 1.0,
+                                          color: isDark ? AppColors.slate100 : AppColors.slate900,
+                                        )),
+                                  ],
+                                ),
+                        ),
+
+                        // ── Conteúdo ───────────────────────────────────────
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(ev.title,
+                                    style: TextStyle(
+                                      fontSize: 14, fontWeight: FontWeight.w700,
+                                      color: isDark ? AppColors.slate100 : AppColors.slate900,
+                                    ),
+                                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                                const SizedBox(height: 6),
+                                Row(children: [
+                                  if (!ev.timeTBD &&
+                                      ev.time != null &&
+                                      ev.time!.isNotEmpty) ...[
+                                    Icon(Icons.access_time_rounded,
+                                        size: 12,
+                                        color: isDark ? AppColors.slate400 : AppColors.slate500),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      ev.time!.length >= 5
+                                          ? ev.time!.substring(0, 5)
+                                          : ev.time!,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: isDark ? AppColors.slate400 : AppColors.slate500,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                  ],
+                                  if (ev.categoryName != null)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 7, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: catColor.withValues(alpha: .12),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(ev.categoryName!,
+                                          style: TextStyle(
+                                            fontSize: 10, fontWeight: FontWeight.w600,
+                                            color: catColor,
+                                          )),
+                                    ),
+                                ]),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        Padding(
+                          padding: const EdgeInsets.only(right: 12),
+                          child: Icon(Icons.chevron_right_rounded,
+                              size: 18,
+                              color: isDark ? AppColors.slate600 : AppColors.slate300),
+                        ),
+                      ]),
+                    ),
+                  );
+                },
+              ),
+            ),
+
+            if (events.length > 1) ...[
+              const SizedBox(height: 8),
+              _DotsIndicator(count: events.length, current: _page, isDark: isDark),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+// ── Link de ação na header da SectionCard ─────────────────────────────────────
+
+class _SectionLink extends StatelessWidget {
+  final String   label;
+  final Color    color;
+  final VoidCallback onTap;
+  const _SectionLink({required this.label, required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Row(mainAxisSize: MainAxisSize.min, children: [
+      Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: color)),
+      Icon(Icons.chevron_right_rounded, size: 14, color: color),
+    ]),
+  );
 }
 
 // ── Header gradiente ──────────────────────────────────────────────────────────

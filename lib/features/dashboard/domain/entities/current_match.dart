@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import '../../../../core/utils/date_utils.dart';
 
 class TeamColor extends Equatable {
   final String id;
@@ -78,11 +79,15 @@ class CurrentMatch extends Equatable {
   final String     placeName;
   final int        status;
   final String     statusName;
+  /// Chave da etapa atual: create | accept | teams | playing | ended | post | done
+  final String     stepKey;
   final int        teamAGoals;
   final int        teamBGoals;
   final TeamColor? teamAColor;
   final TeamColor? teamBColor;
   final List<MatchPlayer> players;
+  /// Id da votação/evento vinculado a esta partida (null = sem vínculo).
+  final String? linkedPollId;
 
   const CurrentMatch({
     required this.matchId,
@@ -91,11 +96,13 @@ class CurrentMatch extends Equatable {
     required this.placeName,
     required this.status,
     required this.statusName,
+    this.stepKey = 'create',
     required this.teamAGoals,
     required this.teamBGoals,
     this.teamAColor,
     this.teamBColor,
     this.players = const [],
+    this.linkedPollId,
   });
 
   factory CurrentMatch.fromJson(Map<String, dynamic> j) {
@@ -144,24 +151,41 @@ class CurrentMatch extends Equatable {
     final statusName = j['statusName'] as String?
         ?? _statusNameFromInt(statusInt);
 
+    final rawKey = j['stepKey'] as String? ?? j['StepKey'] as String?;
+    final stepKey = rawKey ?? _stepKeyFromStatus(statusInt);
+
     return CurrentMatch(
-      matchId:    j['matchId'] as String? ?? j['id'] as String? ?? '',
-      groupId:    j['groupId']    as String? ?? '',
-      playedAt:   _parseDate(j['playedAt'] as String?),
-      placeName:  j['placeName']  as String? ?? '',
-      status:     statusInt,
-      statusName: statusName,
-      teamAGoals: j['teamAGoals'] as int?    ?? 0,
-      teamBGoals: j['teamBGoals'] as int?    ?? 0,
-      teamAColor: parseColor(colorARaw),
-      teamBColor: parseColor(colorBRaw),
-      players:    allPlayers,
+      matchId:     j['matchId'] as String? ?? j['id'] as String? ?? '',
+      groupId:     j['groupId']    as String? ?? '',
+      playedAt:    _parseDate(j['playedAt'] as String?),
+      placeName:   j['placeName']  as String? ?? '',
+      status:      statusInt,
+      statusName:  statusName,
+      stepKey:     stepKey,
+      teamAGoals:  j['teamAGoals'] as int?    ?? 0,
+      teamBGoals:  j['teamBGoals'] as int?    ?? 0,
+      teamAColor:  parseColor(colorARaw),
+      teamBColor:  parseColor(colorBRaw),
+      players:     allPlayers,
+      linkedPollId: (j['linkedPollId'] ?? j['LinkedPollId'])?.toString(),
     );
   }
 
   @override
   List<Object?> get props => [matchId, status, teamAGoals, teamBGoals];
 }
+
+/// Maps the integer status code to its stepKey string.
+/// Must match MatchStepKeys constants on the backend.
+String _stepKeyFromStatus(int status) => switch (status) {
+  1 => 'accept',
+  2 => 'teams',
+  3 => 'playing',
+  4 => 'post',
+  5 => 'done',
+  6 => 'done',
+  _ => 'create',
+};
 
 /// Maps the integer status code the API returns to a human-readable label.
 String _statusNameFromInt(int status) => switch (status) {
@@ -174,11 +198,4 @@ String _statusNameFromInt(int status) => switch (status) {
   _ => 'Agendada',
 };
 
-/// Strips timezone suffix, parses as wall-clock time, then subtracts 3 hours
-/// to compensate for the backend always returning times 3 hours ahead (UTC vs UTC-3).
-DateTime _parseDate(String? s) {
-  if (s == null || s.isEmpty) return DateTime.now();
-  final bare = s.replaceFirst(RegExp(r'Z$|[+-]\d{2}:\d{2}$'), '');
-  final dt = DateTime.tryParse(bare) ?? DateTime.now();
-  return dt.subtract(const Duration(hours: 3));
-}
+DateTime _parseDate(String? s) => parseApiDate(s);

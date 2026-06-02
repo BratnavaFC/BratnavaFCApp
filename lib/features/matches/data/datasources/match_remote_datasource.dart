@@ -80,6 +80,11 @@ class MatchRemoteDataSource {
     return _unwrapMap(res.data);
   }
 
+  Future<Map<String, dynamic>?> fetchAcceptationSummary(String groupId, String matchId) async {
+    final res = await _dio.get(ApiConstants.matchAcceptationSummary(groupId, matchId));
+    return _unwrapMap(res.data);
+  }
+
   Future<Map<String, dynamic>?> fetchMatchmaking(String groupId, String matchId) async {
     final res = await _dio.get(ApiConstants.matchMatchmaking(groupId, matchId));
     return _unwrapMap(res.data);

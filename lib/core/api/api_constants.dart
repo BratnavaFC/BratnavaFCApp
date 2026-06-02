@@ -166,6 +166,7 @@ class ApiConstants {
   static String matchDelete(String groupId, String id)   => '/api/Matches/group/$groupId/$id';
   static String matchHeader(String groupId, String id)   => '/api/Matches/group/$groupId/$id/header';
   static String matchAcceptation(String groupId, String id) => '/api/Matches/group/$groupId/$id/acceptation';
+  static String matchAcceptationSummary(String groupId, String id) => '/api/Matches/group/$groupId/$id/acceptation/summary';
   static String matchMatchmaking(String groupId, String id) => '/api/Matches/group/$groupId/$id/matchmaking';
   static String matchPostgame(String groupId, String id)    => '/api/Matches/group/$groupId/$id/postgame';
   static String matchAccept(String groupId, String id)   => '/api/matches/group/$groupId/$id/my-invite/accept';

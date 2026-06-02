@@ -644,13 +644,10 @@ class UpcomingMatchDetails {
   int get acceptedCount =>
       allPlayers.where((p) => p.inviteResponse == InviteResponse.accepted).length;
 
-  /// Pendentes: só mensalistas e apenas enquanto aceitação está aberta.
   int get pendingCount => _acceptationOpen
-      ? allPlayers.where((p) =>
-            p.inviteResponse == InviteResponse.pending && !p.isGuest).length
+      ? allPlayers.where((p) => p.inviteResponse == InviteResponse.pending).length
       : 0;
 
-  /// Recusados: após fechar aceitação, quem não respondeu também conta como recusado.
   int get refusedCount => _acceptationOpen
       ? allPlayers.where((p) => p.inviteResponse == InviteResponse.declined).length
       : allPlayers.where((p) =>

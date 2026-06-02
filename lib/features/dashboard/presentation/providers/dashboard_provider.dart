@@ -30,7 +30,7 @@ Future<UpcomingMatchDetails> _loadMatchDetails(
 
     final acceptFuture = needsAcceptation
         ? matchDs
-            .fetchAcceptation(header.groupId, header.matchId)
+            .fetchAcceptationSummary(header.groupId, header.matchId)
             .catchError((_) => null as Map<String, dynamic>?)
         : Future<Map<String, dynamic>?>.value(null);
 
